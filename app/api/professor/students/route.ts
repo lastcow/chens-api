@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     SELECT
       s.id, s.canvas_uid, s.sortable_name AS name, s.email,
       c.name AS course_name, c.canvas_id AS course_canvas_id,
+      e.enrollment_state,
       COALESCE(att.attendance_score, 0) AS attendance,
       COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'unsubmitted' OR sub.submitted_at IS NULL) AS missing_count,
       COUNT(sub.id) FILTER (WHERE sub.workflow_state IN ('submitted','pending_review') AND g.id IS NULL) AS ungraded_count,
