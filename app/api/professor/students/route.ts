@@ -17,7 +17,10 @@ export async function GET(req: NextRequest) {
       COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'unsubmitted' OR sub.submitted_at IS NULL) AS missing_count,
       COUNT(sub.id) FILTER (WHERE sub.workflow_state IN ('submitted','pending_review') AND g.id IS NULL) AS ungraded_count,
       ROUND(AVG(g.final_score)::numeric, 1) AS avg_grade,
-      COUNT(DISTINCT a.id) FILTER (WHERE a.due_at IS NOT NULL AND a.due_at < now()) AS total_due
+      COUNT(DISTINCT a.id) FILTER (WHERE a.due_at IS NOT NULL AND a.due_at < now()) AS total_due,
+      (SELECT COUNT(DISTINCT e2.course_id) FROM prof_enrollments e2
+       JOIN prof_courses c2 ON c2.id = e2.course_id AND c2.user_id = $1
+       WHERE e2.student_id = s.id AND e2.user_id = $1) AS course_count
     FROM prof_students s
     JOIN prof_enrollments e ON e.student_id = s.id AND e.user_id = $1
     JOIN prof_courses c ON c.id = e.course_id AND c.user_id = $1
