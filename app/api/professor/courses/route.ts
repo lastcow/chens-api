@@ -7,10 +7,14 @@ export async function GET(req: NextRequest) {
   if (authErr) return authErr;
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
+  const termId = req.nextUrl.searchParams.get("term_id");
+
+  const termFilter = termId ? "AND c.term_id = $2" : "";
+  const params = termId ? [uid, parseInt(termId)] : [uid];
 
   const courses = await profQuery(`
     SELECT
-      c.id, c.canvas_id, c.name, c.course_code, c.term_name,
+      c.id, c.canvas_id, c.name, c.course_code, c.term_name, c.term_id,
       COUNT(DISTINCT e.student_id) AS student_count,
       COUNT(DISTINCT a.id) FILTER (WHERE a.assignment_type = 'assignment' AND a.due_at IS NOT NULL) AS assignment_count,
       ROUND(AVG(g.final_score)::numeric, 1) AS avg_grade,
@@ -20,9 +24,9 @@ export async function GET(req: NextRequest) {
     LEFT JOIN prof_assignments a ON a.course_id = c.id AND a.user_id = $1
     LEFT JOIN prof_submissions sub ON sub.assignment_id = a.id
     LEFT JOIN prof_grades g ON g.submission_id = sub.id
-    WHERE c.user_id = $1
+    WHERE c.user_id = $1 ${termFilter}
     GROUP BY c.id ORDER BY c.name
-  `, [uid]);
+  `, params);
 
   return NextResponse.json({ courses });
 }

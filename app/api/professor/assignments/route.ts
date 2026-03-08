@@ -8,6 +8,13 @@ export async function GET(req: NextRequest) {
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
   const courseId = req.nextUrl.searchParams.get("course_id");
+  const termId   = req.nextUrl.searchParams.get("term_id");
+
+  const conditions: string[] = [];
+  const params: unknown[] = [uid];
+  if (courseId) { params.push(parseInt(courseId)); conditions.push(`c.canvas_id = $${params.length}`); }
+  if (termId)   { params.push(parseInt(termId));   conditions.push(`c.term_id = $${params.length}`); }
+  const extraWhere = conditions.length ? `AND ${conditions.join(" AND ")}` : "";
 
   const assignments = await profQuery(`
     SELECT
@@ -28,9 +35,9 @@ export async function GET(req: NextRequest) {
       AND a.name NOT ILIKE '%progress report%'
       AND a.name NOT ILIKE '%attendance%'
       AND a.name NOT ILIKE '%roll call%'
-      ${courseId ? "AND c.canvas_id = $2" : ""}
+      ${extraWhere}
     GROUP BY a.id, c.id ORDER BY c.name, a.due_at NULLS LAST
-  `, courseId ? [uid, parseInt(courseId)] : [uid]);
+  `, params);
 
   return NextResponse.json({ assignments });
 }

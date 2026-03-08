@@ -8,6 +8,19 @@ export async function GET(req: NextRequest) {
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
   const courseId = req.nextUrl.searchParams.get("course_id");
+  const termId   = req.nextUrl.searchParams.get("term_id");
+
+  const conditions: string[] = [];
+  const params: unknown[] = [uid];
+
+  if (courseId) { params.push(parseInt(courseId)); conditions.push(`c.canvas_id = $${params.length}`); }
+  if (termId)   { params.push(parseInt(termId));   conditions.push(`c.term_id = $${params.length}`); }
+  const where = conditions.length ? `AND ${conditions.join(" AND ")}` : "";
+
+  // Separate param set for the course_count subquery JOIN
+  const ccParams: unknown[] = [uid];
+  if (termId) ccParams.push(parseInt(termId));
+  const ccTermFilter = termId ? `AND c2.term_id = $${ccParams.length}` : "";
 
   const students = await profQuery(`
     SELECT
@@ -26,7 +39,7 @@ export async function GET(req: NextRequest) {
     JOIN (
       SELECT e2.student_id, COUNT(DISTINCT e2.course_id) AS course_count
       FROM prof_enrollments e2
-      JOIN prof_courses c2 ON c2.id = e2.course_id AND c2.user_id = $1
+      JOIN prof_courses c2 ON c2.id = e2.course_id AND c2.user_id = $1 ${ccTermFilter}
       WHERE e2.user_id = $1
       GROUP BY e2.student_id
     ) cc ON cc.student_id = s.id
@@ -39,10 +52,10 @@ export async function GET(req: NextRequest) {
       AND a.name NOT ILIKE '%attendance%'
     LEFT JOIN prof_submissions sub ON sub.student_id = s.id AND sub.assignment_id = a.id
     LEFT JOIN prof_grades g ON g.submission_id = sub.id
-    ${courseId ? "WHERE c.canvas_id = $2" : ""}
+    WHERE e.user_id = $1 ${where}
     GROUP BY s.id, c.id, c.name, c.canvas_id, e.enrollment_state, att.attendance_score, cc.course_count
     ORDER BY c.name, s.sortable_name
-  `, courseId ? [uid, parseInt(courseId)] : [uid]);
+  `, params);
 
   return NextResponse.json({ students });
 }

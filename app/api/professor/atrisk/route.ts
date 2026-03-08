@@ -7,6 +7,10 @@ export async function GET(req: NextRequest) {
   if (authErr) return authErr;
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
+  const termId = req.nextUrl.searchParams.get("term_id");
+
+  const params: unknown[] = [uid];
+  const termFilter = termId ? (params.push(parseInt(termId)), `AND c.term_id = $${params.length}`) : "";
 
   const students = await profQuery(`
     SELECT
@@ -16,8 +20,8 @@ export async function GET(req: NextRequest) {
       COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'unsubmitted' OR sub.submitted_at IS NULL) AS missing_count,
       ROUND(AVG(g.final_score)::numeric, 1) AS avg_grade
     FROM prof_students s
-    JOIN prof_enrollments e ON e.student_id = s.id AND e.user_id = $1
-    JOIN prof_courses c ON c.id = e.course_id AND c.user_id = $1
+    JOIN prof_enrollments e ON e.student_id = s.id AND e.user_id = $1 AND e.enrollment_state = 'active'
+    JOIN prof_courses c ON c.id = e.course_id AND c.user_id = $1 ${termFilter}
     LEFT JOIN prof_attendance att ON att.student_id = s.id AND att.course_id = c.id AND att.user_id = $1
     LEFT JOIN prof_assignments a ON a.course_id = c.id AND a.user_id = $1
       AND a.published = true
@@ -31,7 +35,7 @@ export async function GET(req: NextRequest) {
       COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'unsubmitted' OR sub.submitted_at IS NULL) >= 2
       OR COALESCE(att.attendance_score, 0) < 50
     ORDER BY missing_count DESC, attendance ASC
-  `, [uid]);
+  `, params);
 
   return NextResponse.json({ students });
 }
