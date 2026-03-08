@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     JOIN prof_courses c ON c.id = e.course_id AND c.user_id = $1
     LEFT JOIN prof_attendance att ON att.student_id = s.id AND att.course_id = c.id AND att.user_id = $1
     LEFT JOIN prof_assignments a ON a.course_id = c.id AND a.user_id = $1
+      AND a.published = true
       AND a.name NOT ILIKE '%progress report%'
       AND a.name NOT ILIKE '%attendance%'
       AND a.due_at IS NOT NULL AND a.due_at < now()
