@@ -19,12 +19,17 @@ export async function GET(req: NextRequest) {
       COUNT(sub.id) FILTER (WHERE sub.workflow_state IN ('submitted','pending_review') AND g.id IS NULL) AS ungraded_count,
       ROUND(AVG(g.final_score)::numeric, 1) AS avg_grade,
       COUNT(DISTINCT a.id) FILTER (WHERE a.due_at IS NOT NULL AND a.due_at < now()) AS total_due,
-      (SELECT COUNT(DISTINCT e2.course_id) FROM prof_enrollments e2
-       JOIN prof_courses c2 ON c2.id = e2.course_id AND c2.user_id = $1
-       WHERE e2.student_id = s.id AND e2.user_id = $1) AS course_count
+      cc.course_count
     FROM prof_students s
     JOIN prof_enrollments e ON e.student_id = s.id AND e.user_id = $1
     JOIN prof_courses c ON c.id = e.course_id AND c.user_id = $1
+    JOIN (
+      SELECT e2.student_id, COUNT(DISTINCT e2.course_id) AS course_count
+      FROM prof_enrollments e2
+      JOIN prof_courses c2 ON c2.id = e2.course_id AND c2.user_id = $1
+      WHERE e2.user_id = $1
+      GROUP BY e2.student_id
+    ) cc ON cc.student_id = s.id
     LEFT JOIN prof_attendance att ON att.student_id = s.id AND att.course_id = c.id AND att.user_id = $1
     LEFT JOIN prof_assignments a ON a.course_id = c.id AND a.user_id = $1
       AND a.assignment_type != 'quiz'
@@ -35,7 +40,7 @@ export async function GET(req: NextRequest) {
     LEFT JOIN prof_submissions sub ON sub.student_id = s.id AND sub.assignment_id = a.id
     LEFT JOIN prof_grades g ON g.submission_id = sub.id
     ${courseId ? "WHERE c.canvas_id = $2" : ""}
-    GROUP BY s.id, c.id, c.name, c.canvas_id, att.attendance_score
+    GROUP BY s.id, c.id, c.name, c.canvas_id, e.enrollment_state, att.attendance_score, cc.course_count
     ORDER BY c.name, s.sortable_name
   `, courseId ? [uid, parseInt(courseId)] : [uid]);
 
