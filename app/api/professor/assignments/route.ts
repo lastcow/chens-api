@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
     LEFT JOIN prof_submissions sub ON sub.assignment_id = a.id AND sub.student_id = e.student_id
     LEFT JOIN prof_grades g ON g.submission_id = sub.id
     WHERE a.user_id = $1
+      AND a.published = true
       AND a.name NOT ILIKE '%progress report%'
       AND a.name NOT ILIKE '%attendance%'
       AND a.name NOT ILIKE '%roll call%'
