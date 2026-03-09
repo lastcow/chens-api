@@ -11,15 +11,13 @@ export async function GET(req: NextRequest) {
   const userId = req.nextUrl.searchParams.get("userId");
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+  const profile = await prisma.userProfile.findUnique({
+    where: { user_id: userId },
     select: { canvas_token: true },
   });
 
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-
-  const isSet = !!user.canvas_token;
-  const masked = isSet ? maskToken(decrypt(user.canvas_token!)) : null;
+  const isSet = !!profile?.canvas_token;
+  const masked = isSet ? maskToken(decrypt(profile!.canvas_token!)) : null;
 
   return NextResponse.json({ isSet, masked });
 }
@@ -41,9 +39,11 @@ export async function PUT(req: NextRequest) {
   }
 
   const encrypted = encrypt(token);
-  await prisma.user.update({
-    where: { id: userId },
-    data: { canvas_token: encrypted },
+
+  await prisma.userProfile.upsert({
+    where:  { user_id: userId },
+    update: { canvas_token: encrypted },
+    create: { user_id: userId, canvas_token: encrypted },
   });
 
   return NextResponse.json({ success: true });
@@ -57,12 +57,12 @@ export async function POST(req: NextRequest) {
   const { userId } = await req.json();
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+  const profile = await prisma.userProfile.findUnique({
+    where: { user_id: userId },
     select: { canvas_token: true },
   });
 
-  if (!user?.canvas_token) return NextResponse.json({ error: "No Canvas token saved" }, { status: 404 });
+  if (!profile?.canvas_token) return NextResponse.json({ error: "No Canvas token saved" }, { status: 404 });
 
-  return NextResponse.json({ token: decrypt(user.canvas_token) });
+  return NextResponse.json({ token: decrypt(profile.canvas_token) });
 }

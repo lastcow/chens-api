@@ -7,19 +7,30 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  password      String?
-  image         String?
-  role          Role      @default(USER)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String       @id @default(cuid())
+  name           String?
+  email          String       @unique
+  emailVerified  DateTime?
+  password       String?
+  image          String?
+  role           Role         @default(USER)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   oauth_provider String?
-  suspended      Boolean  @default(false)
+  suspended      Boolean      @default(false)
   oauth_id       String?
-  canvas_token  String?
+  profile        UserProfile?
+}
+
+model UserProfile {
+  id           String   @id @default(uuid())
+  user_id      String   @unique
+  canvas_token String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_profile")
 }
 
 model Module {
