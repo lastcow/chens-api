@@ -36,9 +36,12 @@ export async function POST(req: NextRequest) {
     cancel_at_period_end: true,
   });
 
-  // Use Stripe's actual period end as expires_at (source of truth)
+  // Use Stripe's period end if available, else keep existing expires_at from DB
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const expiresAt = new Date((sub as any).current_period_end * 1000);
+  const periodEnd = (sub as any).current_period_end;
+  const expiresAt = periodEnd
+    ? new Date(periodEnd * 1000)
+    : (userMod.expires_at ?? new Date(Date.now() + 31 * 24 * 60 * 60 * 1000));
 
   await prisma.userModule.updateMany({
     where: { user_id: userId, module: moduleId },
