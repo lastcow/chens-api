@@ -60,10 +60,15 @@ export async function POST(req: NextRequest) {
   }
 
   if (event.type === "customer.subscription.deleted") {
-    const sub = event.data.object as { id: string };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sub = event.data.object as any as { id: string; current_period_end?: number };
     await prisma.userModule.updateMany({
       where: { stripe_subscription_id: sub.id },
-      data: { enabled: false, expires_at: new Date() },
+      data: {
+        enabled: false,
+        cancelled: true,
+        expires_at: sub.current_period_end ? new Date(sub.current_period_end * 1000) : new Date(),
+      },
     });
   }
 

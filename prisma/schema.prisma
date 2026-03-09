@@ -71,6 +71,7 @@ model UserModule {
   stripe_subscription_id String?
   expires_at             DateTime?
   activated_at           DateTime? @default(now())
+  cancelled              Boolean   @default(false)
   updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@unique([user_id, module])
