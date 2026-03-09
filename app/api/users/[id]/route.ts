@@ -10,14 +10,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const user = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, name: true, email: true, role: true, createdAt: true, image: true },
+    select: { id: true, name: true, email: true, role: true, createdAt: true, image: true, oauth_provider: true, suspended: true },
   });
 
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
   return NextResponse.json({ user });
 }
 
-// PATCH /api/users/:id — update user (admin only for role changes)
+// PATCH /api/users/:id — update user (admin only for role/suspend changes)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const authErr = requireApiKey(req);
   if (authErr) return authErr;
@@ -25,8 +25,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json();
 
-  // Role changes require admin
-  if (body.role) {
+  // Role or suspend changes require admin
+  if (body.role !== undefined || body.suspended !== undefined) {
     const adminErr = requireAdmin(req);
     if (adminErr) return adminErr;
   }
@@ -38,8 +38,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         ...(body.name && { name: body.name }),
         ...(body.image && { image: body.image }),
         ...(body.role && { role: body.role }),
+        ...(body.suspended !== undefined && { suspended: body.suspended }),
       },
-      select: { id: true, name: true, email: true, role: true, updatedAt: true },
+      select: { id: true, name: true, email: true, role: true, suspended: true, updatedAt: true },
     });
     return NextResponse.json({ user });
   } catch {

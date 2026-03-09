@@ -17,6 +17,7 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   oauth_provider String?
+  suspended      Boolean  @default(false)
   oauth_id       String?
   canvas_token  String?
 }
