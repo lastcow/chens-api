@@ -22,6 +22,18 @@ model User {
   canvas_token  String?
 }
 
+model UserModule {
+  id        String   @id @default(cuid())
+  user_id   String
+  module    String
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([user_id, module])
+  @@index([user_id])
+  @@map("user_modules")
+}
+
 enum Role {
   USER
   ADMIN
