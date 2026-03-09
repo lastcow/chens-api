@@ -6,6 +6,7 @@ import { requireApiKey } from "@/lib/auth";
 // POST /api/user/subscription/cancel
 // Cancels at period end — user keeps access until expires_at
 export async function POST(req: NextRequest) {
+  try {
   const authErr = requireApiKey(req);
   if (authErr) return authErr;
 
@@ -49,4 +50,8 @@ export async function POST(req: NextRequest) {
     expiresAt: expiresAt.toISOString(),
     message: "Subscription cancelled. Access continues until " + expiresAt.toLocaleDateString(),
   });
+  } catch (err) {
+    console.error("[cancel subscription]", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
