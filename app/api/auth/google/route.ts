@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   if (authErr) return authErr;
 
   try {
-    const { email, name, image } = await req.json();
+    const { email, name, image, oauth_provider, oauth_id } = await req.json();
 
     if (!email) {
       return NextResponse.json({ error: "email is required" }, { status: 400 });
@@ -17,8 +17,16 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.upsert({
       where: { email },
-      update: { name, image, emailVerified: new Date() },
-      create: { email, name, image, emailVerified: new Date() },
+      update: {
+        name, image, emailVerified: new Date(),
+        ...(oauth_provider && { oauth_provider }),
+        ...(oauth_id && { oauth_id }),
+      },
+      create: {
+        email, name, image, emailVerified: new Date(),
+        oauth_provider: oauth_provider ?? "google",
+        oauth_id: oauth_id ?? null,
+      },
       select: { id: true, name: true, email: true, role: true, image: true },
     });
 

@@ -16,6 +16,8 @@ model User {
   role          Role      @default(USER)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  oauth_provider String?
+  oauth_id       String?
   canvas_token  String?
 }
 
