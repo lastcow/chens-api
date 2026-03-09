@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     mode,
     customer_email: userEmail,
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: successUrl || `${process.env.NEXTAUTH_URL}/dashboard/modules?success=1`,
+    success_url: successUrl || `${process.env.NEXTAUTH_URL}/dashboard/modules?success=1&sid={CHECKOUT_SESSION_ID}`,
     cancel_url: cancelUrl || `${process.env.NEXTAUTH_URL}/dashboard/modules?cancelled=1`,
     metadata: { userId, moduleId, paymentType },
   });
