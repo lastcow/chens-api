@@ -32,15 +32,28 @@ export async function POST(req: NextRequest) {
     paymentType === "monthly" ? new Date(Date.now() + 31  * 24 * 60 * 60 * 1000) :
     null;
 
-  // Activate module (upsert — idempotent)
-  const userMod = await prisma.userModule.upsert({
-    where:  { user_id_module: { user_id: userId, module: moduleId } },
-    update: { enabled: true, payment_type: paymentType, expires_at: expiresAt, activated_at: new Date(),
-               stripe_subscription_id: session.subscription as string ?? null },
-    create: { user_id: userId, module: moduleId, enabled: true, payment_type: paymentType,
-               expires_at: expiresAt, activated_at: new Date(),
-               stripe_subscription_id: session.subscription as string ?? null },
+  const updateData = {
+    enabled: true,
+    payment_type: paymentType,
+    expires_at: expiresAt,
+    activated_at: new Date(),
+    stripe_subscription_id: (session.subscription as string) ?? null,
+  };
+
+  // updateMany first — handles existing record regardless of unique constraint naming
+  const updated = await prisma.userModule.updateMany({
+    where: { user_id: userId, module: moduleId },
+    data: updateData,
   });
+
+  // If no row existed yet, create one
+  if (updated.count === 0) {
+    await prisma.userModule.create({
+      data: { user_id: userId, module: moduleId, ...updateData },
+    });
+  }
+
+  const userMod = await prisma.userModule.findFirst({ where: { user_id: userId, module: moduleId } });
 
   // Mark payment completed (if not already done by webhook)
   await prisma.payment.updateMany({

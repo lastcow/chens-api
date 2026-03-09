@@ -23,25 +23,24 @@ export async function POST(req: NextRequest) {
       ? new Date(Date.now() + 31 * 24 * 60 * 60 * 1000)
       : null;
 
-    await prisma.userModule.upsert({
-      where: { user_id_module: { user_id: userId, module: moduleId } },
-      update: {
-        enabled: true,
-        payment_type: paymentType,
-        stripe_subscription_id: subscriptionId ?? null,
-        expires_at: expiresAt,
-        activated_at: new Date(),
-      },
-      create: {
-        user_id: userId,
-        module: moduleId,
-        enabled: true,
-        payment_type: paymentType,
-        stripe_subscription_id: subscriptionId ?? null,
-        expires_at: expiresAt,
-        activated_at: new Date(),
-      },
+    const updateData = {
+      enabled: true,
+      payment_type: paymentType,
+      stripe_subscription_id: subscriptionId ?? null,
+      expires_at: expiresAt,
+      activated_at: new Date(),
+    };
+
+    const updated = await prisma.userModule.updateMany({
+      where: { user_id: userId, module: moduleId },
+      data: updateData,
     });
+
+    if (updated.count === 0) {
+      await prisma.userModule.create({
+        data: { user_id: userId, module: moduleId, ...updateData },
+      });
+    }
   };
 
   if (event.type === "checkout.session.completed") {
