@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     verified: true,
     moduleId,
     paymentType,
-    expiresAt: userMod.expires_at,
-    activatedAt: userMod.activated_at,
+    expiresAt: userMod?.expires_at ?? null,
+    activatedAt: userMod?.activated_at ?? null,
   });
 }
