@@ -23,11 +23,11 @@ model User {
 }
 
 model UserModule {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid())
   user_id   String
   module    String
   enabled   Boolean  @default(true)
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@unique([user_id, module])
   @@index([user_id])
