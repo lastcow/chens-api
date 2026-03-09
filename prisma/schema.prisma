@@ -22,12 +22,56 @@ model User {
   canvas_token  String?
 }
 
+model Module {
+  id                      String   @id
+  label                   String
+  icon                    String   @default("📦")
+  description             String   @default("")
+  is_free                 Boolean  @default(false)
+  price_one_time          Decimal? @db.Decimal(10, 2)
+  price_monthly           Decimal? @db.Decimal(10, 2)
+  price_annual            Decimal? @db.Decimal(10, 2)
+  allow_one_time          Boolean  @default(false)
+  allow_monthly           Boolean  @default(false)
+  allow_annual            Boolean  @default(false)
+  stripe_product_id       String?
+  stripe_price_one_time_id String?
+  stripe_price_monthly_id  String?
+  stripe_price_annual_id   String?
+  active                  Boolean  @default(true)
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("modules")
+}
+
+model Payment {
+  id                      String   @id @default(uuid())
+  user_id                 String
+  module_id               String
+  stripe_session_id       String?
+  stripe_payment_intent_id String?
+  stripe_subscription_id  String?
+  amount                  Decimal? @db.Decimal(10, 2)
+  currency                String   @default("usd")
+  payment_type            String
+  status                  String   @default("pending")
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  @@index([user_id])
+  @@map("payments")
+}
+
 model UserModule {
-  id        String   @id @default(uuid())
-  user_id   String
-  module    String
-  enabled   Boolean  @default(true)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  id                     String    @id @default(uuid())
+  user_id                String
+  module                 String
+  enabled                Boolean   @default(true)
+  payment_type           String?
+  stripe_subscription_id String?
+  expires_at             DateTime?
+  activated_at           DateTime? @default(now())
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@unique([user_id, module])
   @@index([user_id])
