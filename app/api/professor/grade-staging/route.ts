@@ -149,12 +149,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Mark request complete
-    await profQuery(
-      `UPDATE prof_requests SET status = 'completed' WHERE id = $1 AND user_id = $2`,
-      [request_id, uid]
-    );
-
+    // Note: prof_requests status is NOT changed here — it was set to 'completed'
+    // by grade_queue.py when staging was written. Approve/reject only affect staging rows.
     return NextResponse.json({ ok: true, posted: stagingGrades.length - errors.length, errors });
 
   } else if (action === "reject") {
@@ -163,10 +159,7 @@ export async function POST(req: NextRequest) {
        WHERE request_id = $1 AND user_id = $2 AND status = 'pending'`,
       [request_id, uid]
     );
-    await profQuery(
-      `UPDATE prof_requests SET status = 'completed' WHERE id = $1 AND user_id = $2`,
-      [request_id, uid]
-    );
+    // Note: prof_requests status is NOT changed — approve/reject only affect staging rows.
     return NextResponse.json({ ok: true });
   }
 

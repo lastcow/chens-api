@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiKey } from "@/lib/auth";
+import { profQuery } from "@/lib/prof-db";
 
 // GET /api/professor/grade-request — list requests for this user
 export async function GET(req: NextRequest) {
@@ -42,6 +43,25 @@ export async function POST(req: NextRequest) {
 
   if (existing) {
     return NextResponse.json({ error: "Already requested", request: existing }, { status: 409 });
+  }
+
+  // Cancel action — set pending/in_progress request to completed, reject any staging rows
+  if (body.action === "cancel") {
+    const target = await prisma.profRequest.findFirst({
+      where: { user_id: uid, assignment_id: Number(assignment_id), status: { in: ["pending", "in_progress"] } },
+    });
+    if (!target) return NextResponse.json({ error: "No active request to cancel" }, { status: 404 });
+
+    await profQuery(
+      `UPDATE prof_grade_staging SET status = 'rejected', updated_at = now()
+       WHERE request_id = $1 AND user_id = $2 AND status = 'pending'`,
+      [target.id, uid]
+    );
+    await prisma.profRequest.update({
+      where: { id: target.id },
+      data: { status: "completed" },
+    });
+    return NextResponse.json({ ok: true });
   }
 
   const request = await prisma.profRequest.create({

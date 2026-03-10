@@ -40,7 +40,6 @@ export async function GET(req: NextRequest) {
         FROM prof_requests pr
         JOIN prof_grade_staging pgs ON pgs.request_id = pr.id AND pgs.status = 'pending'
         WHERE pr.assignment_id = a.id AND pr.user_id = $1
-          AND pr.status IN ('pending','in_progress')
       ), 0) AS staging_count,
       (
         SELECT pr.id FROM prof_requests pr
