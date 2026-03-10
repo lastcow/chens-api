@@ -26,7 +26,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Verify with Stripe
-  const session = await stripe.checkout.sessions.retrieve(session_id);
+  let session;
+  try {
+    session = await stripe.checkout.sessions.retrieve(session_id);
+  } catch {
+    return NextResponse.json({ error: "Invalid session_id" }, { status: 400 });
+  }
   if (session.payment_status !== "paid") {
     return NextResponse.json({ error: "Payment not completed", status: session.payment_status }, { status: 402 });
   }
