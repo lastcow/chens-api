@@ -6,6 +6,6 @@ export async function profQuery<T = Record<string, unknown>>(
   query: string,
   params: unknown[] = []
 ): Promise<T[]> {
-  const rows = await sql(query, params);
+  const rows = await sql.query(query, params as any[]);
   return rows as T[];
 }
