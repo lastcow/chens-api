@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const canvasToken = decryptCanvasToken(rows[0].canvas_token);
 
   const agentUrl = process.env.CHENS_AGENT_URL ?? "https://chens-agent.fly.dev";
-  const agentKey = process.env.AGENT_API_KEY!;
+  const agentKey = process.env.CHENS_AGENT_KEY!;
 
   const resp = await fetch(`${agentUrl}/grade/preview`, {
     method: "POST",
