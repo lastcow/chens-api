@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
             SELECT 1 FROM prof_grade_staging pgs2
             JOIN prof_requests pr2 ON pr2.id = pgs2.request_id
             WHERE pr2.assignment_id = a.id AND pr2.user_id = $1
+              AND pr2.status NOT IN ('completed')
               AND pgs2.submission_id = sub.id AND pgs2.status = 'pending'
           )
       ) AS ungraded_count,

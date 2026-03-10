@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
       [request_id, uid]
     );
     await profQuery(
-      `UPDATE prof_requests SET status = 'cancelled' WHERE id = $1 AND user_id = $2`,
+      `UPDATE prof_requests SET status = 'completed' WHERE id = $1 AND user_id = $2`,
       [request_id, uid]
     );
     return NextResponse.json({ ok: true });
