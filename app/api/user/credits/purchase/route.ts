@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiKey } from "@/lib/auth";
-import Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-12-18.acacia" });
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://chen.me";
 
 // POST /api/user/credits/purchase — create Stripe checkout for credits
