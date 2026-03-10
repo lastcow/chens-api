@@ -46,7 +46,13 @@ export async function GET(req: NextRequest) {
         WHERE pr.assignment_id = a.id AND pr.user_id = $1
           AND pr.status IN ('pending','in_progress')
         ORDER BY pr.created_at DESC LIMIT 1
-      ) AS pending_request_id
+      ) AS pending_request_id,
+      (
+        SELECT pr.id FROM prof_requests pr
+        JOIN prof_grade_staging pgs ON pgs.request_id = pr.id AND pgs.status = 'pending'
+        WHERE pr.assignment_id = a.id AND pr.user_id = $1
+        ORDER BY pr.created_at DESC LIMIT 1
+      ) AS staging_request_id
     FROM prof_assignments a
     JOIN prof_courses c ON c.id = a.course_id AND c.user_id = $1
     JOIN prof_enrollments e ON e.course_id = c.id AND e.user_id = $1
