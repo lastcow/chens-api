@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
+import { profQuery } from "@/lib/prof-db";
 
 export const config = { api: { bodyParser: false } };
 
@@ -45,7 +46,27 @@ export async function POST(req: NextRequest) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as { metadata?: Record<string, string>; payment_intent?: string; subscription?: string; id: string };
-    const { userId, moduleId, paymentType } = session.metadata ?? {};
+    const { userId, moduleId, paymentType, type: metaType, credits } = session.metadata ?? {};
+
+    // Credit purchase fulfillment
+    if (metaType === "credit_purchase" && userId && credits) {
+      const amount = parseFloat(credits);
+      const balRows = await profQuery<{ credits: string }>(
+        `INSERT INTO user_profile (user_id, credits)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id) DO UPDATE SET credits = user_profile.credits + $2
+         RETURNING credits::text`,
+        [userId, amount]
+      );
+      const balanceAfter = parseFloat(balRows[0]?.credits ?? "0");
+      await profQuery(
+        `INSERT INTO credit_transactions (user_id, type, amount, description, ref_id, balance_after)
+         VALUES ($1, 'purchase', $2, $3, $4, $5)`,
+        [userId, amount, `Purchased ${amount} credits`, session.id, balanceAfter]
+      );
+    }
+
+    // Module purchase fulfillment
     if (userId && moduleId && paymentType) {
       await activate(userId, moduleId, paymentType, session.subscription as string | undefined);
       await prisma.payment.updateMany({
