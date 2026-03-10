@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
     if (metaType === "credit_purchase" && userId && credits) {
       const amount = parseFloat(credits);
       const balRows = await profQuery<{ credits: string }>(
-        `INSERT INTO user_profile (user_id, credits)
-         VALUES ($1, $2)
+        `INSERT INTO user_profile (id, user_id, credits)
+         VALUES (gen_random_uuid()::text, $1, $2)
          ON CONFLICT (user_id) DO UPDATE SET credits = user_profile.credits + $2
          RETURNING credits::text`,
         [userId, amount]
