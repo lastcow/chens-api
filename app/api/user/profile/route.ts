@@ -34,27 +34,32 @@ export async function GET(req: NextRequest) {
     providers = ["google"]; // legacy fallback
   }
 
-  // Cost summary
-  const costRows = await profQuery<{
-    total_cost: string; month_cost: string; total_runs: string; month_runs: string;
-  }>(
-    `SELECT
-       COALESCE(SUM(cost_usd), 0)::text AS total_cost,
-       COALESCE(SUM(cost_usd) FILTER (WHERE created_at >= date_trunc('month', now())), 0)::text AS month_cost,
-       COUNT(*)::text AS total_runs,
-       COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::text AS month_runs
-     FROM agent_runs WHERE user_id = $1`,
-    [uid]
-  );
-  const c = costRows[0];
+  // Cost summary — gracefully handle missing agent_runs table
+  let costs = { total: 0, month: 0, total_runs: 0, month_runs: 0 };
+  try {
+    const costRows = await profQuery<{
+      total_cost: string; month_cost: string; total_runs: string; month_runs: string;
+    }>(
+      `SELECT
+         COALESCE(SUM(cost_usd), 0)::text AS total_cost,
+         COALESCE(SUM(cost_usd) FILTER (WHERE created_at >= date_trunc('month', now())), 0)::text AS month_cost,
+         COUNT(*)::text AS total_runs,
+         COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::text AS month_runs
+       FROM agent_runs WHERE user_id = $1`,
+      [uid]
+    );
+    const c = costRows[0];
+    if (c) {
+      costs = {
+        total:      parseFloat(c.total_cost  ?? "0"),
+        month:      parseFloat(c.month_cost  ?? "0"),
+        total_runs: parseInt(c.total_runs    ?? "0"),
+        month_runs: parseInt(c.month_runs    ?? "0"),
+      };
+    }
+  } catch {
+    // agent_runs table may not exist yet — return zeros
+  }
 
-  return NextResponse.json({
-    user: { ...user, providers },
-    costs: {
-      total:      parseFloat(c?.total_cost  ?? "0"),
-      month:      parseFloat(c?.month_cost  ?? "0"),
-      total_runs: parseInt(c?.total_runs    ?? "0"),
-      month_runs: parseInt(c?.month_runs    ?? "0"),
-    },
-  });
+  return NextResponse.json({ user: { ...user, providers }, costs });
 }
