@@ -20,10 +20,10 @@ export async function GET(req: NextRequest) {
     SELECT
       a.id, a.canvas_id, a.name, a.points_possible, a.due_at, a.assignment_type,
       c.name AS course_name, c.canvas_id AS course_canvas_id,
-      COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'graded' OR g.id IS NOT NULL) AS graded_count,
+      COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'graded' OR (g.id IS NOT NULL AND (sub.submitted_at IS NULL OR sub.submitted_at <= g.graded_at))) AS graded_count,
       COUNT(sub.id) FILTER (
         WHERE sub.workflow_state IN ('submitted','pending_review')
-          AND g.id IS NULL
+          AND (g.id IS NULL OR sub.submitted_at > g.graded_at)
           AND NOT EXISTS (
             SELECT 1 FROM prof_grade_staging pgs2
             JOIN prof_requests pr2 ON pr2.id = pgs2.request_id
