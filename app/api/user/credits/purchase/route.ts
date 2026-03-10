@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiKey } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://chen.me";
+import { prisma } from "@/lib/prisma";
 
 // POST /api/user/credits/purchase — create Stripe checkout for credits
-// Body: { credits: number, success_url?: string, cancel_url?: string }
+// Body: { credits: number, success_url: string, cancel_url: string }
 export async function POST(req: NextRequest) {
   const authErr = requireApiKey(req);
   if (authErr) return authErr;
@@ -16,9 +15,13 @@ export async function POST(req: NextRequest) {
   const credits = Math.max(100, Math.round(Number(body.credits ?? 100)));
   const amountCents = credits * 100; // 1 credit = $1.00 = 100 cents
 
+  // Fetch user email for pre-fill
+  const user = await prisma.user.findUnique({ where: { id: uid }, select: { email: true } });
+
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
     mode: "payment",
+    customer_email: user?.email ?? undefined,
     line_items: [{
       price_data: {
         currency: "usd",
@@ -31,8 +34,8 @@ export async function POST(req: NextRequest) {
       quantity: 1,
     }],
     metadata: { user_id: uid, credits: credits.toString(), type: "credit_purchase" },
-    success_url: body.success_url ?? `${APP_URL}/profile/credits?purchased=${credits}`,
-    cancel_url:  body.cancel_url  ?? `${APP_URL}/profile/credits`,
+    success_url: body.success_url,
+    cancel_url:  body.cancel_url,
   });
 
   return NextResponse.json({ url: session.url, session_id: session.id });
