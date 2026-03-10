@@ -90,6 +90,23 @@ model UserModule {
   @@map("user_modules")
 }
 
+model ProfRequest {
+  id               String   @id @default(uuid())
+  user_id          String
+  assignment_id    Int
+  course_canvas_id Int
+  assignment_name  String
+  course_name      String   @default("")
+  status           String   @default("pending")
+  notes            String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @default(now()) @updatedAt
+
+  @@index([user_id])
+  @@index([assignment_id])
+  @@map("prof_requests")
+}
+
 enum Role {
   USER
   ADMIN
