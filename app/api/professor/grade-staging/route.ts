@@ -116,7 +116,10 @@ export async function POST(req: NextRequest) {
           {
             method: "PUT",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ submission: { posted_grade: sg.final_score } }),
+            body: JSON.stringify({
+              submission: { posted_grade: sg.final_score },
+              ...(sg.grader_comment ? { comment: { text_comment: sg.grader_comment } } : {}),
+            }),
           }
         );
         if (!res.ok) {
