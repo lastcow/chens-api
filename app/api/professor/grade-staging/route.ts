@@ -114,14 +114,28 @@ export async function POST(req: NextRequest) {
     for (const sg of stagingGrades) {
       if (!sg.student_canvas_uid) continue;
       try {
-        // Post raw_score to Canvas — Canvas applies its own late penalty automatically
+        // Build Canvas submission payload:
+        // - Always post raw_score; Canvas handles the late deduction itself
+        // - If late and NOT waived → late_policy_status='late' + seconds_late_override
+        // - If late and waived (is_late=false after edit) → late_policy_status='none'
+        const submissionPayload: Record<string, unknown> = {
+          posted_grade: sg.raw_score,
+        };
+        if (sg.is_late) {
+          submissionPayload.late_policy_status = "late";
+          submissionPayload.seconds_late_override = (sg.days_late ?? 1) * 86400;
+        } else if (!sg.is_late && sg.days_late === 0) {
+          // Explicitly cleared — waive any existing late penalty
+          submissionPayload.late_policy_status = "none";
+        }
+
         const res = await fetch(
           `${CANVAS_BASE}/api/v1/courses/${profReq.course_canvas_id}/assignments/${assignmentCanvasId}/submissions/${sg.student_canvas_uid}`,
           {
             method: "PUT",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              submission: { posted_grade: sg.raw_score },
+              submission: submissionPayload,
               ...(sg.grader_comment ? { comment: { text_comment: sg.grader_comment } } : {}),
             }),
           }
