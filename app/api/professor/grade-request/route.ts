@@ -55,8 +55,13 @@ export async function POST(req: NextRequest) {
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
 
-  const body = await req.json();
-  const { assignment_id, course_canvas_id, assignment_name, course_name, notes, ungraded_count } = body;
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const { assignment_id, course_canvas_id, assignment_name, course_name, notes, ungraded_count } = body as Record<string, unknown>;
 
   if (!assignment_id) return NextResponse.json({ error: "Missing assignment_id" }, { status: 400 });
 
@@ -123,29 +128,43 @@ export async function POST(req: NextRequest) {
 
   // Deduct credits upfront
   if (totalCost > 0) {
-    await deductCredits(uid, totalCost, `Grading: ${assignment_name} (${count} submissions)`, "pending");
+    await deductCredits(uid, totalCost, `Grading: ${assignment_name as string} (${count} submissions)`, "pending");
   }
 
-  // Create request — store credit_cost in notes for potential refund
-  const request = await prisma.profRequest.create({
-    data: {
-      user_id: uid,
-      assignment_id: Number(assignment_id),
-      course_canvas_id: Number(course_canvas_id),
-      assignment_name,
-      course_name: course_name ?? "",
-      notes: JSON.stringify({ credit_cost: totalCost, submission_count: count, ...(notes ? { note: notes } : {}) }),
-    },
-  });
+  let request;
+  try {
+    // Create request — store credit_cost in notes for potential refund
+    request = await prisma.profRequest.create({
+      data: {
+        user_id: uid,
+        assignment_id: Number(assignment_id),
+        course_canvas_id: Number(course_canvas_id),
+        assignment_name: assignment_name as string,
+        course_name: (course_name as string) ?? "",
+        notes: JSON.stringify({ credit_cost: totalCost, submission_count: count, ...(notes ? { note: notes } : {}) }),
+      },
+    });
+  } catch (err: unknown) {
+    // Roll back credits if request creation fails
+    if (totalCost > 0) {
+      await refundCredits(uid, totalCost, `Refund (create failed): ${assignment_name as string}`, "create-failed");
+    }
+    console.error("[grade-request] prisma.create failed:", err);
+    return NextResponse.json({ error: "Failed to create request" }, { status: 500 });
+  }
 
-  // Update the credit transaction ref_id now that we have the request id
+  // Update the credit transaction ref_id now that we have the request id (best-effort)
   if (totalCost > 0) {
-    await profQuery(
-      `UPDATE credit_transactions SET ref_id = $1
-       WHERE user_id = $2 AND ref_id = 'pending' AND type = 'usage'
-       ORDER BY created_at DESC LIMIT 1`,
-      [request.id, uid]
-    );
+    try {
+      await profQuery(
+        `UPDATE credit_transactions SET ref_id = $1
+         WHERE user_id = $2 AND ref_id = 'pending' AND type = 'usage'
+         ORDER BY created_at DESC LIMIT 1`,
+        [request.id, uid]
+      );
+    } catch (err) {
+      console.error("[grade-request] ref_id update failed (non-fatal):", err);
+    }
   }
 
   return NextResponse.json({ request, credit_cost: totalCost, balance_after: balance - totalCost }, { status: 201 });
