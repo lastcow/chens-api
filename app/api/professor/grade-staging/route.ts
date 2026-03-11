@@ -3,7 +3,8 @@ import { requireApiKey } from "@/lib/auth";
 import { profQuery } from "@/lib/prof-db";
 import { decrypt } from "@/lib/crypto";
 
-const CANVAS_BASE = process.env.CANVAS_BASE_URL ?? "https://frostburg.instructure.com";
+// Strip trailing /api/v1 if present — the route builds the full path itself
+const CANVAS_BASE = (process.env.CANVAS_BASE_URL ?? "https://frostburg.instructure.com").replace(/\/api\/v1\/?$/, "");
 
 async function getUserCanvasToken(userId: string): Promise<string | null> {
   const rows = await profQuery<{ canvas_token: string }>(
