@@ -140,9 +140,9 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        // Mark staging as approved
+        // Mark staging as complete
         await profQuery(
-          `UPDATE prof_grade_staging SET status = 'approved', updated_at = now() WHERE id = $1`, [sg.id]
+          `UPDATE prof_grade_staging SET status = 'complete', updated_at = now() WHERE id = $1`, [sg.id]
         );
       } catch (err: any) {
         errors.push(`Student ${sg.student_canvas_uid}: ${err.message}`);
