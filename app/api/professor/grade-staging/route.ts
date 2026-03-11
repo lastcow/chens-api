@@ -33,7 +33,8 @@ export async function GET(req: NextRequest) {
 
   const grades = await profQuery(
     `SELECT id, submission_id, student_name, student_canvas_uid, assignment_name,
-            course_name, raw_score, final_score, late_penalty, grader_comment, ai_model, status
+            course_name, raw_score, final_score, late_penalty, grader_comment, ai_model, status,
+            is_late, days_late
      FROM prof_grade_staging
      WHERE request_id = $1 AND user_id = $2
      ORDER BY student_name`,
@@ -49,14 +50,15 @@ export async function PATCH(req: NextRequest) {
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
 
-  const { staging_id, raw_score, final_score, grader_comment } = await req.json();
+  const { staging_id, raw_score, final_score, grader_comment, is_late, days_late } = await req.json();
   if (!staging_id) return NextResponse.json({ error: "Missing staging_id" }, { status: 400 });
 
   await profQuery(
     `UPDATE prof_grade_staging
-     SET raw_score = $1, final_score = $2, grader_comment = $3, updated_at = now()
-     WHERE id = $4 AND user_id = $5 AND status = 'pending'`,
-    [raw_score, final_score, grader_comment ?? "", staging_id, uid]
+     SET raw_score = $1, final_score = $2, grader_comment = $3,
+         is_late = $4, days_late = $5, updated_at = now()
+     WHERE id = $6 AND user_id = $7 AND status = 'pending'`,
+    [raw_score, final_score, grader_comment ?? "", is_late ?? false, days_late ?? 0, staging_id, uid]
   );
   return NextResponse.json({ ok: true });
 }
@@ -92,8 +94,10 @@ export async function POST(req: NextRequest) {
     const stagingGrades = await profQuery<{
       id: number; submission_id: number | null; student_canvas_uid: number | null;
       final_score: string; raw_score: string; late_penalty: string; grader_comment: string;
+      is_late: boolean; days_late: number;
     }>(
-      `SELECT id, submission_id, student_canvas_uid, final_score, raw_score, late_penalty, grader_comment
+      `SELECT id, submission_id, student_canvas_uid, final_score, raw_score, late_penalty, grader_comment,
+              is_late, days_late
        FROM prof_grade_staging
        WHERE request_id = $1 AND user_id = $2 AND status = 'pending'`,
       [request_id, uid]
@@ -110,14 +114,14 @@ export async function POST(req: NextRequest) {
     for (const sg of stagingGrades) {
       if (!sg.student_canvas_uid) continue;
       try {
-        // Post grade to Canvas
+        // Post raw_score to Canvas — Canvas applies its own late penalty automatically
         const res = await fetch(
           `${CANVAS_BASE}/api/v1/courses/${profReq.course_canvas_id}/assignments/${assignmentCanvasId}/submissions/${sg.student_canvas_uid}`,
           {
             method: "PUT",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              submission: { posted_grade: sg.final_score },
+              submission: { posted_grade: sg.raw_score },
               ...(sg.grader_comment ? { comment: { text_comment: sg.grader_comment } } : {}),
             }),
           }
