@@ -45,7 +45,8 @@ export async function GET(
        FROM prof_grades pg
        JOIN prof_submissions ps ON pg.submission_id = ps.id
        JOIN prof_assignments pa ON ps.assignment_id = pa.id
-       WHERE ps.student_id = $1 AND pa.term_id = $2 AND pa.published = true`,
+       JOIN prof_courses pc ON pa.course_id = pc.id
+       WHERE ps.student_id = $1 AND pc.term_id = $2 AND pa.published = true`,
       [student.id, termId]
     );
 
@@ -76,9 +77,10 @@ export async function GET(
          CASE WHEN pg.late_penalty > 0 THEN COALESCE(pg.late_penalty::int, 0) ELSE NULL END AS days_late,
          ps.submitted_at
        FROM prof_assignments pa
+       JOIN prof_courses pc ON pa.course_id = pc.id
        LEFT JOIN prof_submissions ps ON pa.id = ps.assignment_id AND ps.student_id = $1
        LEFT JOIN prof_grades pg ON ps.id = pg.submission_id
-       WHERE pa.term_id = $2 AND pa.published = true
+       WHERE pc.term_id = $2 AND pa.published = true
        ORDER BY pa.created_at`,
       [student.id, termId]
     );
