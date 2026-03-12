@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const students = await profQuery(`
     SELECT
       s.id, s.sortable_name AS name, s.canvas_uid,
-      c.name AS course_name, c.canvas_id AS course_canvas_id,
+      c.id AS course_id, c.name AS course_name, c.canvas_id AS course_canvas_id,
       COALESCE(att.attendance_score, 0) AS attendance,
       COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'unsubmitted' OR sub.submitted_at IS NULL) AS missing_count,
       ROUND(AVG(g.final_score)::numeric, 1) AS avg_grade

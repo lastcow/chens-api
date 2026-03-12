@@ -17,6 +17,9 @@ export async function GET(
 
   const termParam = req.nextUrl.searchParams.get("term_id");
   const termId = termParam ? parseInt(termParam) : 245; // Default to current term
+  
+  const courseParam = req.nextUrl.searchParams.get("course_id");
+  const courseId = courseParam ? parseInt(courseParam) : undefined;
 
   try {
     // Fetch student basic info
@@ -40,19 +43,25 @@ export async function GET(
     const student = studentRows[0];
 
     // Get current grade (average of final scores in this term's courses for this user)
+    const gradeParams = [student.id, termId, uid];
+    const courseFilt = courseId ? (gradeParams.push(courseId), ` AND pa.course_id = $${gradeParams.length}`) : "";
+    
     const gradeRows = await profQuery<{ avg_score: string | null }>(
       `SELECT ROUND(AVG(pg.final_score)::numeric, 2)::text AS avg_score
        FROM prof_grades pg
        JOIN prof_submissions ps ON pg.submission_id = ps.id
        JOIN prof_assignments pa ON ps.assignment_id = pa.id
        JOIN prof_courses pc ON pa.course_id = pc.id
-       WHERE ps.student_id = $1 AND pc.term_id = $2 AND pa.published = true AND pa.due_at IS NOT NULL AND pc.user_id = $3`,
-      [student.id, termId, uid]
+       WHERE ps.student_id = $1 AND pc.term_id = $2 AND pa.published = true AND pa.due_at IS NOT NULL AND pc.user_id = $3${courseFilt}`,
+      gradeParams
     );
 
     const currentGrade = gradeRows.length > 0 && gradeRows[0].avg_score ? parseFloat(gradeRows[0].avg_score) : 0;
 
     // Get all assignments with submission status for this student
+    const assignParams = [student.id, termId, uid];
+    const assignCourseFilt = courseId ? (assignParams.push(courseId), ` AND pa.course_id = $${assignParams.length}`) : "";
+    
     const assignmentsRows = await profQuery<{
       id: number;
       name: string;
@@ -80,9 +89,9 @@ export async function GET(
        JOIN prof_courses pc ON pa.course_id = pc.id
        LEFT JOIN prof_submissions ps ON pa.id = ps.assignment_id AND ps.student_id = $1
        LEFT JOIN prof_grades pg ON ps.id = pg.submission_id
-       WHERE pc.term_id = $2 AND pa.published = true AND pa.due_at IS NOT NULL AND pc.user_id = $3
+       WHERE pc.term_id = $2 AND pa.published = true AND pa.due_at IS NOT NULL AND pc.user_id = $3${assignCourseFilt}
        ORDER BY pa.created_at`,
-      [student.id, termId, uid]
+      assignParams
     );
 
     // Calculate at-risk reasons
@@ -102,15 +111,18 @@ export async function GET(
     }
 
     // Get attendance data (from attendance_score stored per student per course)
+    const attParams = [student.id, termId, uid];
+    const attCourseFilt = courseId ? (attParams.push(courseId), ` AND pa.course_id = $${attParams.length}`) : "";
+    
     const attendanceRows = await profQuery<{
       attendance_score: string | null;
     }>(
       `SELECT COALESCE(pa.attendance_score, 0)::text AS attendance_score
        FROM prof_attendance pa
        JOIN prof_courses pc ON pa.course_id = pc.id
-       WHERE pa.student_id = $1 AND pc.term_id = $2 AND pc.user_id = $3
+       WHERE pa.student_id = $1 AND pc.term_id = $2 AND pc.user_id = $3${attCourseFilt}
        LIMIT 1`,
-      [student.id, termId, uid]
+      attParams
     );
 
     const attendanceScore = attendanceRows.length > 0 && attendanceRows[0].attendance_score 
