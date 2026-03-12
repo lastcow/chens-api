@@ -12,8 +12,9 @@ export async function GET(
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
 
+  console.log(`[atrisk-detail] Request for student_id="${student_id}"`);
   const canvasUid = parseInt(student_id);
-  if (isNaN(canvasUid)) return NextResponse.json({ error: "Invalid student_id" }, { status: 400 });
+  if (isNaN(canvasUid)) return NextResponse.json({ error: "Invalid student_id", received: student_id }, { status: 400 });
 
   const termParam = req.nextUrl.searchParams.get("term_id");
   const termId = termParam ? parseInt(termParam) : 245; // Default to current term
@@ -34,10 +35,12 @@ export async function GET(
     );
 
     if (!studentRows.length) {
-      return NextResponse.json({ error: "Student not found" }, { status: 404 });
+      console.error(`[atrisk-detail] Student not found for canvas_uid=${canvasUid}`);
+      return NextResponse.json({ error: "Student not found", canvas_uid: canvasUid }, { status: 404 });
     }
 
     const student = studentRows[0];
+    console.log(`[atrisk-detail] Found student: ${student.name} (canvas_uid=${student.canvas_uid}, id=${student.id})`);
 
     // Get current grade (average of final scores in this term's courses for this user)
     const gradeRows = await profQuery<{ avg_score: string | null }>(
