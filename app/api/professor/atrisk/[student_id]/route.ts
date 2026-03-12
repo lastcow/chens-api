@@ -46,7 +46,7 @@ export async function GET(
        JOIN prof_submissions ps ON pg.submission_id = ps.id
        JOIN prof_assignments pa ON ps.assignment_id = pa.id
        JOIN prof_courses pc ON pa.course_id = pc.id
-       WHERE ps.student_id = $1 AND pc.term_id = $2 AND pa.published = true AND pc.user_id = $3`,
+       WHERE ps.student_id = $1 AND pc.term_id = $2 AND pa.published = true AND pa.due_at IS NOT NULL AND pc.user_id = $3`,
       [student.id, termId, uid]
     );
 
@@ -80,7 +80,7 @@ export async function GET(
        JOIN prof_courses pc ON pa.course_id = pc.id
        LEFT JOIN prof_submissions ps ON pa.id = ps.assignment_id AND ps.student_id = $1
        LEFT JOIN prof_grades pg ON ps.id = pg.submission_id
-       WHERE pc.term_id = $2 AND pa.published = true AND pc.user_id = $3
+       WHERE pc.term_id = $2 AND pa.published = true AND pa.due_at IS NOT NULL AND pc.user_id = $3
        ORDER BY pa.created_at`,
       [student.id, termId, uid]
     );
