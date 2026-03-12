@@ -97,7 +97,7 @@ export async function GET(
 
     // Calculate at-risk reasons
     const reasons: string[] = [];
-    const missingCount = assignmentsRows.filter(a => !a.submitted).length;
+    const missingCount = assignmentsRows.filter(a => a.status === 'missing').length;
 
     if (currentGrade < 60) {
       reasons.push(`Grade: ${currentGrade}% (critical)`);
