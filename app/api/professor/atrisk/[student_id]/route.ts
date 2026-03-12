@@ -75,11 +75,11 @@ export async function GET(
       `SELECT
          pa.id,
          pa.name,
-         CASE WHEN ps.id IS NOT NULL THEN true ELSE false END AS submitted,
+         CASE WHEN ps.id IS NOT NULL AND ps.workflow_state != 'unsubmitted' AND ps.submitted_at IS NOT NULL THEN true ELSE false END AS submitted,
          pg.final_score::text AS grade,
          pa.points_possible::text,
          CASE
-           WHEN ps.id IS NULL THEN 'missing'
+           WHEN ps.id IS NULL OR ps.workflow_state = 'unsubmitted' OR ps.submitted_at IS NULL THEN 'missing'
            WHEN pg.id IS NOT NULL THEN 'graded'
            ELSE 'ungraded'
          END AS status,
