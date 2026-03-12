@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
       workflow_state: string;
       final_score: string | null;
       points_possible: string;
+      due_at: string | null;
     }>(
       `SELECT
          ps.id,
@@ -32,7 +33,8 @@ export async function GET(req: NextRequest) {
          ps.submitted_at,
          ps.workflow_state,
          pg.final_score,
-         pa.points_possible
+         pa.points_possible,
+         pa.due_at
        FROM prof_submissions ps
        JOIN prof_students s ON ps.student_id = s.id
        JOIN prof_assignments pa ON ps.assignment_id = pa.id
@@ -43,20 +45,29 @@ export async function GET(req: NextRequest) {
       [parseInt(assignmentId), uid]
     );
 
-    const submissions = rows.map(r => ({
-      id: r.id,
-      student_name: r.student_name,
-      student_canvas_uid: r.student_canvas_uid,
-      submitted_at: r.submitted_at,
-      workflow_state: r.workflow_state,
-      status: !r.submitted_at || r.workflow_state === "unsubmitted"
-        ? "missing"
-        : r.final_score !== null
-        ? "graded"
-        : "ungraded",
-      grade: r.final_score ? parseInt(r.final_score) : null,
-      points_possible: parseInt(r.points_possible),
-    }));
+    const now = new Date();
+    const submissions = rows.map(r => {
+      const isSubmitted = r.submitted_at && r.workflow_state !== "unsubmitted";
+      const isPastDue = r.due_at && new Date(r.due_at) < now;
+      
+      let status: string;
+      if (isSubmitted) {
+        status = r.final_score !== null ? "graded" : "ungraded";
+      } else {
+        status = isPastDue ? "missing" : "unsubmitted";
+      }
+      
+      return {
+        id: r.id,
+        student_name: r.student_name,
+        student_canvas_uid: r.student_canvas_uid,
+        submitted_at: r.submitted_at,
+        workflow_state: r.workflow_state,
+        status,
+        grade: r.final_score ? parseInt(r.final_score) : null,
+        points_possible: parseInt(r.points_possible),
+      };
+    });
 
     return NextResponse.json({ submissions });
   } catch (err) {
