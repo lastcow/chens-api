@@ -141,6 +141,7 @@ export async function POST(req: NextRequest) {
         course_canvas_id: Number(course_canvas_id),
         assignment_name: assignment_name as string,
         course_name: (course_name as string) ?? "",
+        estimated_ungraded_count: count,
         notes: JSON.stringify({ credit_cost: totalCost, submission_count: count, ...(notes ? { note: notes } : {}) }),
       },
     });
