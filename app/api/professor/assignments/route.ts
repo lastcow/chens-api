@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const assignments = await profQuery(`
     SELECT
-      a.id, a.canvas_id, a.name, a.points_possible, a.due_at, a.assignment_type,
+      a.id, a.canvas_id, a.name, a.points_possible, a.due_at, a.assignment_type, a.is_quiz,
       c.name AS course_name, c.canvas_id AS course_canvas_id,
       COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'graded' OR (g.id IS NOT NULL AND (sub.submitted_at IS NULL OR sub.submitted_at <= g.graded_at))) AS graded_count,
       COUNT(sub.id) FILTER (
