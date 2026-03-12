@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiKey } from "@/lib/auth";
 import { profQuery } from "@/lib/prof-db";
 
-export async function GET(req: NextRequest, { params }: { params: { student_id: string } }) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ student_id: string }> }
+) {
+  const { student_id } = await params;
   const authErr = requireApiKey(req);
   if (authErr) return authErr;
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
 
-  const studentId = parseInt(params.student_id);
+  const studentId = parseInt(student_id);
   if (isNaN(studentId)) return NextResponse.json({ error: "Invalid student_id" }, { status: 400 });
 
   const termParam = req.nextUrl.searchParams.get("term_id");
