@@ -46,8 +46,8 @@ export async function GET(
        JOIN prof_submissions ps ON pg.submission_id = ps.id
        JOIN prof_assignments pa ON ps.assignment_id = pa.id
        JOIN prof_courses pc ON pa.course_id = pc.id
-       WHERE ps.student_id = $1 AND pc.term_id = $2 AND pa.published = true`,
-      [student.id, termId]
+       WHERE ps.student_id = $1 AND pc.term_id = $2 AND pa.published = true AND pc.user_id = $3`,
+      [student.id, termId, uid]
     );
 
     const currentGrade = gradeRows.length > 0 && gradeRows[0].avg_score ? parseFloat(gradeRows[0].avg_score) : 0;
@@ -80,9 +80,9 @@ export async function GET(
        JOIN prof_courses pc ON pa.course_id = pc.id
        LEFT JOIN prof_submissions ps ON pa.id = ps.assignment_id AND ps.student_id = $1
        LEFT JOIN prof_grades pg ON ps.id = pg.submission_id
-       WHERE pc.term_id = $2 AND pa.published = true
+       WHERE pc.term_id = $2 AND pa.published = true AND pc.user_id = $3
        ORDER BY pa.created_at`,
-      [student.id, termId]
+      [student.id, termId, uid]
     );
 
     // Calculate at-risk reasons
@@ -108,9 +108,9 @@ export async function GET(
       `SELECT COALESCE(pa.attendance_score, 0)::text AS attendance_score
        FROM prof_attendance pa
        JOIN prof_courses pc ON pa.course_id = pc.id
-       WHERE pa.student_id = $1 AND pc.term_id = $2
+       WHERE pa.student_id = $1 AND pc.term_id = $2 AND pc.user_id = $3
        LIMIT 1`,
-      [student.id, termId]
+      [student.id, termId, uid]
     );
 
     const attendanceScore = attendanceRows.length > 0 && attendanceRows[0].attendance_score 
