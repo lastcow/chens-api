@@ -48,8 +48,8 @@ export async function GET(
        FROM prof_grades pg
        JOIN prof_submissions ps ON pg.submission_id = ps.id
        JOIN prof_assignments pa ON ps.assignment_id = pa.id
-       WHERE ps.student_canvas_uid = $1 AND pa.term_id = $2 AND pa.published = true`,
-      [student.canvas_uid, termId]
+       WHERE ps.student_id = $1 AND pa.term_id = $2 AND pa.published = true`,
+      [student.id, termId]
     );
 
     const currentGrade = gradeRows.length > 0 && gradeRows[0].avg_score ? parseFloat(gradeRows[0].avg_score) : 0;
@@ -76,14 +76,14 @@ export async function GET(
            WHEN pg.id IS NOT NULL THEN 'graded'
            ELSE 'ungraded'
          END AS status,
-         pg.is_late THEN COALESCE(pg.days_late, 0) ELSE NULL END AS days_late,
+         CASE WHEN pg.late_penalty > 0 THEN COALESCE(pg.late_penalty::int, 0) ELSE NULL END AS days_late,
          ps.submitted_at
        FROM prof_assignments pa
-       LEFT JOIN prof_submissions ps ON pa.id = ps.assignment_id AND ps.student_canvas_uid = $1
+       LEFT JOIN prof_submissions ps ON pa.id = ps.assignment_id AND ps.student_id = $1
        LEFT JOIN prof_grades pg ON ps.id = pg.submission_id
        WHERE pa.term_id = $2 AND pa.published = true
        ORDER BY pa.created_at`,
-      [student.canvas_uid, termId]
+      [student.id, termId]
     );
 
     // Calculate at-risk reasons
@@ -105,41 +105,30 @@ export async function GET(
 
     // TODO: Add attendance reasons once attendance is fetched
 
-    // Get attendance data
+    // Get attendance data (from attendance_score stored per student per course)
     const attendanceRows = await profQuery<{
-      total_sessions: string;
-      attended: string;
-      percentage: string;
+      attendance_score: string | null;
     }>(
-      `SELECT
-         COUNT(*)::text AS total_sessions,
-         SUM(CASE WHEN attended = true THEN 1 ELSE 0 END)::text AS attended,
-         ROUND(100.0 * SUM(CASE WHEN attended = true THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0))::text AS percentage
-       FROM prof_attendance
-       WHERE student_canvas_uid = $1 AND term_id = $2`,
-      [student.canvas_uid, termId]
+      `SELECT COALESCE(pa.attendance_score, 0)::text AS attendance_score
+       FROM prof_attendance pa
+       JOIN prof_courses pc ON pa.course_id = pc.id
+       WHERE pa.student_id = $1 AND pc.term_id = $2
+       LIMIT 1`,
+      [student.id, termId]
     );
 
-    const attendanceData = attendanceRows.length > 0 ? attendanceRows[0] : { total_sessions: "0", attended: "0", percentage: "0" };
-    const attendancePercent = parseInt(attendanceData.percentage || "0");
+    const attendanceScore = attendanceRows.length > 0 && attendanceRows[0].attendance_score 
+      ? parseInt(attendanceRows[0].attendance_score) 
+      : 0;
 
-    if (attendancePercent < 50) {
-      reasons.push(`Attendance: ${attendancePercent}% (critical)`);
-    } else if (attendancePercent < 75) {
-      reasons.push(`Attendance: ${attendancePercent}% (low)`);
+    if (attendanceScore < 50) {
+      reasons.push(`Attendance: ${attendanceScore}% (critical)`);
+    } else if (attendanceScore < 75) {
+      reasons.push(`Attendance: ${attendanceScore}% (low)`);
     }
 
-    // Get recent absences
-    const absencesRows = await profQuery<{
-      date: string;
-      session: string;
-    }>(
-      `SELECT date::text, session FROM prof_attendance
-       WHERE student_canvas_uid = $1 AND term_id = $2 AND attended = false
-       ORDER BY date DESC
-       LIMIT 5`,
-      [student.canvas_uid, termId]
-    );
+    // Get recent absences (prof_attendance doesn't have date info, so return empty list)
+    const absencesRows: Array<{ date: string; session: string }> = [];
 
     return NextResponse.json({
       student: {
@@ -168,13 +157,10 @@ export async function GET(
         submitted_at: a.submitted_at,
       })),
       attendance: {
-        total_sessions: parseInt(attendanceData.total_sessions),
-        attended: parseInt(attendanceData.attended),
-        percentage: attendancePercent,
-        recent_absences: absencesRows.map(a => ({
-          date: a.date,
-          session: a.session,
-        })),
+        total_sessions: 0, // Not tracked at this level
+        attended: 0,
+        percentage: attendanceScore,
+        recent_absences: absencesRows,
       },
     });
   } catch (err) {
