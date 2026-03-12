@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
       final_score: string | null;
       points_possible: string;
       due_at: string | null;
+      is_resubmitted: boolean;
     }>(
       `SELECT
          ps.id,
@@ -34,7 +35,8 @@ export async function GET(req: NextRequest) {
          ps.workflow_state,
          pg.final_score,
          pa.points_possible,
-         pa.due_at
+         pa.due_at,
+         ps.is_resubmitted
        FROM prof_submissions ps
        JOIN prof_students s ON ps.student_id = s.id
        JOIN prof_assignments pa ON ps.assignment_id = pa.id
@@ -51,7 +53,9 @@ export async function GET(req: NextRequest) {
       const isPastDue = r.due_at && new Date(r.due_at) < now;
       
       let status: string;
-      if (isSubmitted) {
+      if (r.is_resubmitted) {
+        status = "resubmitted";  // Resubmitted takes priority
+      } else if (isSubmitted) {
         status = r.final_score !== null ? "graded" : "ungraded";
       } else {
         status = isPastDue ? "missing" : "unsubmitted";
