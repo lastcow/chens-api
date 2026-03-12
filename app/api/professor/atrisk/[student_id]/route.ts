@@ -12,8 +12,8 @@ export async function GET(
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
 
-  const studentId = parseInt(student_id);
-  if (isNaN(studentId)) return NextResponse.json({ error: "Invalid student_id" }, { status: 400 });
+  const canvasUid = parseInt(student_id);
+  if (isNaN(canvasUid)) return NextResponse.json({ error: "Invalid student_id" }, { status: 400 });
 
   const termParam = req.nextUrl.searchParams.get("term_id");
   const termId = termParam ? parseInt(termParam) : 245; // Default to current term
@@ -29,8 +29,8 @@ export async function GET(
       `SELECT s.id, s.name, s.canvas_uid, u.email
        FROM prof_students s
        LEFT JOIN public."User" u ON s.email = u.email
-       WHERE s.id = $1`,
-      [studentId]
+       WHERE s.canvas_uid = $1`,
+      [canvasUid]
     );
 
     if (!studentRows.length) {
