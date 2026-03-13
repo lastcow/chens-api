@@ -49,14 +49,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
 
   // Get all assignments + submissions + grades for this student across professor's courses
   const assignmentRows = await profQuery<{
-    course_id: number; assignment_id: number; assignment_name: string; points_possible: number;
+    course_id: number; assignment_id: number; assignment_canvas_id: number;
+    assignment_name: string; points_possible: number;
     due_at: string | null; is_quiz: boolean; quiz_id: number | null; assignment_type: string;
     submission_id: number | null; score: number | null; final_score: number | null;
     late_penalty: number | null; grader_comment: string | null;
     workflow_state: string | null; late: boolean | null; submitted_at: string | null;
     course_canvas_id: number; canvas_posted: boolean | null;
   }>(
-    `SELECT a.course_id, a.id AS assignment_id, a.name AS assignment_name, a.points_possible,
+    `SELECT a.course_id, a.id AS assignment_id, a.canvas_id AS assignment_canvas_id,
+            a.name AS assignment_name, a.points_possible,
             a.due_at, a.is_quiz, a.quiz_id, a.assignment_type,
             sub.id AS submission_id,
             g.raw_score AS score, g.final_score, g.late_penalty, g.grader_comment,
@@ -93,6 +95,39 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
   for (const qg of quizGrades) {
     if (!quizMap.has(qg.assignment_name)) {
       quizMap.set(qg.assignment_name, qg);
+    }
+  }
+
+  // Fetch missing comments from Canvas API and backfill
+  const emptyCommentRows = assignmentRows.filter(
+    a => a.submission_id && a.score !== null && (!a.grader_comment || a.grader_comment === "")
+  );
+  if (emptyCommentRows.length > 0) {
+    const token = await getUserCanvasToken(uid);
+    if (token) {
+      const fetchPromises = emptyCommentRows.map(async (a) => {
+        try {
+          const url = `${CANVAS_BASE}/api/v1/courses/${a.course_canvas_id}/assignments/${a.assignment_canvas_id}/submissions/${canvasUid}?include[]=submission_comments`;
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          const comments: string[] = (data.submission_comments ?? [])
+            .map((c: { comment: string }) => c.comment)
+            .filter((c: string) => c && c.trim());
+          if (comments.length > 0) {
+            const comment = comments[comments.length - 1]; // latest comment
+            a.grader_comment = comment;
+            // Silently backfill to DB
+            await profQuery(
+              `UPDATE prof_grades SET grader_comment = $1 WHERE submission_id = $2 AND (grader_comment IS NULL OR grader_comment = '')`,
+              [comment, a.submission_id]
+            );
+          }
+        } catch { /* ignore fetch errors */ }
+      });
+      await Promise.all(fetchPromises);
     }
   }
 
