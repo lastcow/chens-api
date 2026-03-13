@@ -54,14 +54,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
     submission_id: number | null; score: number | null; final_score: number | null;
     late_penalty: number | null; grader_comment: string | null;
     workflow_state: string | null; late: boolean | null; submitted_at: string | null;
-    course_canvas_id: number;
+    course_canvas_id: number; canvas_posted: boolean | null;
   }>(
     `SELECT a.course_id, a.id AS assignment_id, a.name AS assignment_name, a.points_possible,
             a.due_at, a.is_quiz, a.quiz_id, a.assignment_type,
             sub.id AS submission_id,
             g.raw_score AS score, g.final_score, g.late_penalty, g.grader_comment,
             sub.workflow_state, sub.late, sub.submitted_at,
-            c.canvas_id AS course_canvas_id
+            c.canvas_id AS course_canvas_id,
+            g.canvas_posted
      FROM prof_assignments a
      JOIN prof_courses c ON c.id = a.course_id AND c.user_id = $1
      JOIN prof_enrollments e ON e.course_id = c.id AND e.student_id = $2 AND e.user_id = $1
@@ -122,6 +123,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
           late: a.late,
           submitted_at: a.submitted_at,
           course_canvas_id: a.course_canvas_id,
+          canvas_posted: a.canvas_posted ?? null,
           question_grades: quiz?.question_grades ?? null,
           quiz_submission_id: quiz?.quiz_submission_id ?? null,
         };
