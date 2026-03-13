@@ -104,10 +104,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
     }
   }
 
-  // Fetch missing comments/comment_ids from Canvas API (by professor), backfill
+  // Fetch from Canvas: missing comments/IDs OR late submissions where penalty may be unsynced
   const emptyCommentRows = assignmentRows.filter(
     a => a.submission_id && a.score !== null &&
-      ((!a.grader_comment || a.grader_comment === "") || !a.canvas_comment_id)
+      ((!a.grader_comment || a.grader_comment === "") || !a.canvas_comment_id || (a.late === true && (a.late_penalty === null || a.late_penalty === 0)))
   );
   if (emptyCommentRows.length > 0) {
     const tokenData = await getUserCanvasToken(uid);
@@ -135,6 +135,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
           const profComments = canvasUserId
             ? allComments.filter(c => Number(c.author_id) === Number(canvasUserId))
             : allComments;
+
+          // Sync raw score: Canvas `entered_score` is pre-penalty, `points_deducted` is the penalty
+          const enteredScore: number | null = data.entered_score ?? null;
+          const pointsDeducted: number | null = data.points_deducted ?? null;
+          if (enteredScore !== null && enteredScore !== a.score) {
+            a.score = enteredScore;
+            a.late_penalty = pointsDeducted ?? 0;
+            await profQuery(
+              `UPDATE prof_grades SET raw_score = $1, late_penalty = $2 WHERE submission_id = $3`,
+              [enteredScore, pointsDeducted ?? 0, a.submission_id]
+            );
+          }
+
           if (profComments.length > 0) {
             const latest = profComments[profComments.length - 1];
             a.grader_comment = latest.comment;
