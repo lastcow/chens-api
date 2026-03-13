@@ -5,13 +5,14 @@ import { decrypt } from "@/lib/crypto";
 
 const CANVAS_BASE = (process.env.CANVAS_BASE_URL ?? "https://frostburg.instructure.com").replace(/\/api\/v1\/?$/, "");
 
-async function getUserCanvasToken(userId: string): Promise<string | null> {
-  const rows = await profQuery<{ canvas_token: string }>(
-    `SELECT up.canvas_token FROM user_profile up WHERE up.user_id = $1`, [userId]
+async function getUserCanvasToken(userId: string): Promise<{ token: string; canvasUserId: number | null } | null> {
+  const rows = await profQuery<{ canvas_token: string; canvas_user_id: number | null }>(
+    `SELECT up.canvas_token, up.canvas_user_id FROM user_profile up WHERE up.user_id = $1`, [userId]
   );
   const enc = rows[0]?.canvas_token;
   if (!enc) return null;
-  return decrypt(enc);
+  const token = decrypt(enc);
+  return { token, canvasUserId: rows[0]?.canvas_user_id ?? null };
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ canvas_uid: string }> }) {
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
     assignment_name: string; points_possible: number;
     due_at: string | null; is_quiz: boolean; quiz_id: number | null; assignment_type: string;
     submission_id: number | null; score: number | null; final_score: number | null;
-    late_penalty: number | null; grader_comment: string | null;
+    late_penalty: number | null; grader_comment: string | null; canvas_comment_id: number | null;
     workflow_state: string | null; late: boolean | null; submitted_at: string | null;
     course_canvas_id: number; canvas_posted: boolean | null;
   }>(
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
             a.name AS assignment_name, a.points_possible,
             a.due_at, a.is_quiz, a.quiz_id, a.assignment_type,
             sub.id AS submission_id,
-            g.raw_score AS score, g.final_score, g.late_penalty, g.grader_comment,
+            g.raw_score AS score, g.final_score, g.late_penalty, g.grader_comment, g.canvas_comment_id,
             sub.workflow_state, sub.late, sub.submitted_at,
             c.canvas_id AS course_canvas_id,
             g.canvas_posted
@@ -98,34 +99,47 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
     }
   }
 
-  // Fetch missing comments from Canvas API and backfill
+  // Fetch missing comments from Canvas API (by professor), backfill comment + canvas_comment_id
   const emptyCommentRows = assignmentRows.filter(
     a => a.submission_id && a.score !== null && (!a.grader_comment || a.grader_comment === "")
   );
   if (emptyCommentRows.length > 0) {
-    const token = await getUserCanvasToken(uid);
-    if (token) {
+    const tokenData = await getUserCanvasToken(uid);
+    if (tokenData) {
+      let { token, canvasUserId } = tokenData;
+      // Resolve canvas_user_id if not cached
+      if (!canvasUserId) {
+        try {
+          const meRes = await fetch(`${CANVAS_BASE}/api/v1/users/self`, { headers: { Authorization: `Bearer ${token}` } });
+          if (meRes.ok) {
+            const me = await meRes.json();
+            canvasUserId = me.id;
+            await profQuery(`UPDATE user_profile SET canvas_user_id = $1 WHERE user_id = $2`, [canvasUserId, uid]);
+          }
+        } catch { /* ignore */ }
+      }
       const fetchPromises = emptyCommentRows.map(async (a) => {
         try {
           const url = `${CANVAS_BASE}/api/v1/courses/${a.course_canvas_id}/assignments/${a.assignment_canvas_id}/submissions/${canvasUid}?include[]=submission_comments`;
-          const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
           if (!res.ok) return;
           const data = await res.json();
-          const comments: string[] = (data.submission_comments ?? [])
-            .map((c: { comment: string }) => c.comment)
-            .filter((c: string) => c && c.trim());
-          if (comments.length > 0) {
-            const comment = comments[comments.length - 1]; // latest comment
-            a.grader_comment = comment;
-            // Silently backfill to DB
+          const allComments: Array<{ id: number; author_id: number; comment: string }> = data.submission_comments ?? [];
+          // Filter to professor's comments only, take latest
+          const profComments = canvasUserId
+            ? allComments.filter(c => c.author_id === canvasUserId)
+            : allComments;
+          if (profComments.length > 0) {
+            const latest = profComments[profComments.length - 1];
+            a.grader_comment = latest.comment;
+            a.canvas_comment_id = latest.id;
             await profQuery(
-              `UPDATE prof_grades SET grader_comment = $1 WHERE submission_id = $2 AND (grader_comment IS NULL OR grader_comment = '')`,
-              [comment, a.submission_id]
+              `UPDATE prof_grades SET grader_comment = $1, canvas_comment_id = $2 
+               WHERE submission_id = $3 AND (grader_comment IS NULL OR grader_comment = '')`,
+              [latest.comment, latest.id, a.submission_id]
             );
           }
-        } catch { /* ignore fetch errors */ }
+        } catch { /* ignore */ }
       });
       await Promise.all(fetchPromises);
     }
@@ -154,6 +168,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
           final_score: a.final_score,
           late_penalty: a.late_penalty,
           grader_comment: a.grader_comment,
+          canvas_comment_id: a.canvas_comment_id ?? null,
           workflow_state: a.workflow_state,
           late: a.late,
           submitted_at: a.submitted_at,
@@ -183,7 +198,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ canv
 
   const body = await req.json();
   const { submission_id, assignment_id, score, comment, is_late, days_late, late_penalty,
-          question_grades, quiz_submission_id, course_canvas_id, quiz_id, post_to_canvas } = body;
+          question_grades, quiz_submission_id, course_canvas_id, quiz_id, post_to_canvas,
+          canvas_comment_id } = body;
 
   if (!submission_id || !assignment_id) {
     return NextResponse.json({ error: "Missing submission_id or assignment_id" }, { status: 400 });
@@ -194,13 +210,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ canv
   // Update prof_grades — mark as unpushed when not posting to Canvas
   const posted = post_to_canvas ? true : false;
   await profQuery(
-    `INSERT INTO prof_grades (submission_id, raw_score, final_score, late_penalty, grader_comment, graded_by, graded_at, canvas_posted, user_id)
-     VALUES ($1, $2, $3, $4, $5, 'manual', now(), $6, $7)
+    `INSERT INTO prof_grades (submission_id, raw_score, final_score, late_penalty, grader_comment, canvas_comment_id, graded_by, graded_at, canvas_posted, user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'manual', now(), $7, $8)
      ON CONFLICT (submission_id) DO UPDATE
        SET raw_score = EXCLUDED.raw_score, final_score = EXCLUDED.final_score,
            late_penalty = EXCLUDED.late_penalty, grader_comment = EXCLUDED.grader_comment,
-           graded_by = 'manual', graded_at = now(), canvas_posted = $6`,
-    [submission_id, score, finalScore, late_penalty ?? 0, comment ?? "", posted, uid]
+           graded_by = 'manual', graded_at = now(), canvas_posted = $7`,
+    [submission_id, score, finalScore, late_penalty ?? 0, comment ?? "", canvas_comment_id ?? null, posted, uid]
   );
 
   // Update submission workflow state
@@ -226,8 +242,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ canv
 
   // Optionally post to Canvas
   if (post_to_canvas && course_canvas_id) {
-    const token = await getUserCanvasToken(uid);
-    if (!token) return NextResponse.json({ error: "No Canvas token" }, { status: 400 });
+    const tokenData = await getUserCanvasToken(uid);
+    if (!tokenData) return NextResponse.json({ error: "No Canvas token" }, { status: 400 });
+    const token = tokenData.token;
 
     const asgRows = await profQuery<{ canvas_id: number }>(
       `SELECT canvas_id FROM prof_assignments WHERE id = $1`, [assignment_id]
@@ -258,7 +275,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ canv
         return NextResponse.json({ ok: true, canvas_error: `Quiz API HTTP ${quizRes.status}: ${errText.slice(0, 200)}` });
       }
     } else {
-      // Regular assignment
+      // Regular assignment — update score
       const submissionPayload: Record<string, unknown> = { posted_grade: score };
       if (is_late) {
         submissionPayload.late_policy_status = "late";
@@ -269,14 +286,53 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ canv
         {
           method: "PUT",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            submission: submissionPayload,
-            ...(comment ? { comment: { text_comment: comment } } : {}),
-          }),
+          body: JSON.stringify({ submission: submissionPayload }),
         }
       );
       if (!res.ok) {
         return NextResponse.json({ ok: true, canvas_error: `HTTP ${res.status}` });
+      }
+
+      // Handle comment: edit existing or create new
+      if (comment) {
+        let newCommentId: number | null = null;
+        if (canvas_comment_id) {
+          // Edit existing comment
+          const editRes = await fetch(
+            `${CANVAS_BASE}/api/v1/courses/${course_canvas_id}/assignments/${assignmentCanvasId}/submissions/${canvasUid}/comments/${canvas_comment_id}`,
+            {
+              method: "PUT",
+              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ comment: comment }),
+            }
+          );
+          if (editRes.ok) {
+            const editData = await editRes.json();
+            newCommentId = editData.submission_comment?.id ?? canvas_comment_id;
+          }
+        } else {
+          // Create new comment
+          const commentRes = await fetch(
+            `${CANVAS_BASE}/api/v1/courses/${course_canvas_id}/assignments/${assignmentCanvasId}/submissions/${canvasUid}`,
+            {
+              method: "PUT",
+              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ comment: { text_comment: comment } }),
+            }
+          );
+          if (commentRes.ok) {
+            const commentData = await commentRes.json();
+            const comments = commentData.submission_comments ?? [];
+            newCommentId = comments.length > 0 ? comments[comments.length - 1].id : null;
+          }
+        }
+        // Save comment ID to DB
+        if (newCommentId) {
+          await profQuery(
+            `UPDATE prof_grades SET canvas_comment_id = $1, grader_comment = $2 WHERE submission_id = $3`,
+            [newCommentId, comment, submission_id]
+          );
+        }
       }
     }
 
