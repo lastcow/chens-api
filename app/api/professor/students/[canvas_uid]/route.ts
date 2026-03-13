@@ -12,7 +12,8 @@ async function getUserCanvasToken(userId: string): Promise<{ token: string; canv
   const enc = rows[0]?.canvas_token;
   if (!enc) return null;
   const token = decrypt(enc);
-  return { token, canvasUserId: rows[0]?.canvas_user_id ?? null };
+  const rawUid = rows[0]?.canvas_user_id;
+  return { token, canvasUserId: rawUid != null ? Number(rawUid) : null };
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ canvas_uid: string }> }) {
@@ -103,9 +104,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
     }
   }
 
-  // Fetch missing comments from Canvas API (by professor), backfill comment + canvas_comment_id
+  // Fetch missing comments/comment_ids from Canvas API (by professor), backfill
   const emptyCommentRows = assignmentRows.filter(
-    a => a.submission_id && a.score !== null && (!a.grader_comment || a.grader_comment === "")
+    a => a.submission_id && a.score !== null &&
+      ((!a.grader_comment || a.grader_comment === "") || !a.canvas_comment_id)
   );
   if (emptyCommentRows.length > 0) {
     const tokenData = await getUserCanvasToken(uid);
@@ -117,7 +119,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
           const meRes = await fetch(`${CANVAS_BASE}/api/v1/users/self`, { headers: { Authorization: `Bearer ${token}` } });
           if (meRes.ok) {
             const me = await meRes.json();
-            canvasUserId = me.id;
+            canvasUserId = Number(me.id);
             await profQuery(`UPDATE user_profile SET canvas_user_id = $1 WHERE user_id = $2`, [canvasUserId, uid]);
           }
         } catch { /* ignore */ }
@@ -129,17 +131,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
           if (!res.ok) return;
           const data = await res.json();
           const allComments: Array<{ id: number; author_id: number; comment: string }> = data.submission_comments ?? [];
-          // Filter to professor's comments only, take latest
+          // Filter to professor's comments only (coerce both sides to Number to avoid bigint/string mismatch)
           const profComments = canvasUserId
-            ? allComments.filter(c => c.author_id === canvasUserId)
+            ? allComments.filter(c => Number(c.author_id) === Number(canvasUserId))
             : allComments;
           if (profComments.length > 0) {
             const latest = profComments[profComments.length - 1];
             a.grader_comment = latest.comment;
             a.canvas_comment_id = latest.id;
             await profQuery(
-              `UPDATE prof_grades SET grader_comment = $1, canvas_comment_id = $2 
-               WHERE submission_id = $3 AND (grader_comment IS NULL OR grader_comment = '')`,
+              `UPDATE prof_grades SET grader_comment = $1, canvas_comment_id = $2 WHERE submission_id = $3`,
               [latest.comment, latest.id, a.submission_id]
             );
           }
