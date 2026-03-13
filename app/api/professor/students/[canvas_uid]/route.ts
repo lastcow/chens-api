@@ -175,6 +175,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
         const quiz = a.is_quiz ? quizMap.get(a.assignment_name) : null;
         return {
           assignment_id: a.assignment_id,
+          assignment_canvas_id: a.assignment_canvas_id,
           submission_id: a.submission_id,
           name: a.assignment_name,
           points_possible: a.points_possible,
