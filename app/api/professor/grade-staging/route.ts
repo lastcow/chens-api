@@ -84,10 +84,11 @@ export async function POST(req: NextRequest) {
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
 
-  const { request_id, action } = await req.json();
+  const { request_id, action, excluded_ids } = await req.json();
   if (!request_id || !action) {
     return NextResponse.json({ error: "Missing request_id or action" }, { status: 400 });
   }
+  const excludedSet = new Set<number>(excluded_ids ?? []);
 
   // Verify ownership
   const reqRows = await profQuery<{
@@ -126,8 +127,10 @@ export async function POST(req: NextRequest) {
     if (!assignmentCanvasId) return NextResponse.json({ error: "Assignment canvas_id not found" }, { status: 400 });
 
     const errors: string[] = [];
+    let skipped = 0;
     for (const sg of stagingGrades) {
       if (!sg.student_canvas_uid) continue;
+      if (excludedSet.has(sg.id)) { skipped++; continue; }
       try {
         const isQuiz = sg.question_grades && sg.quiz_submission_id;
 
@@ -225,7 +228,8 @@ export async function POST(req: NextRequest) {
 
     // Note: prof_requests status is NOT changed here — it was set to 'completed'
     // by grade_queue.py when staging was written. Approve/reject only affect staging rows.
-    return NextResponse.json({ ok: true, posted: stagingGrades.length - errors.length, errors });
+    // Excluded students remain as 'pending' in staging for future approval.
+    return NextResponse.json({ ok: true, posted: stagingGrades.length - errors.length - skipped, skipped, errors });
 
   } else if (action === "reject") {
     await profQuery(
