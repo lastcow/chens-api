@@ -191,15 +191,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ canv
 
   const finalScore = Math.max(0, (score ?? 0) - (late_penalty ?? 0));
 
-  // Update prof_grades
+  // Update prof_grades — mark as unpushed when not posting to Canvas
+  const posted = post_to_canvas ? true : false;
   await profQuery(
     `INSERT INTO prof_grades (submission_id, raw_score, final_score, late_penalty, grader_comment, graded_by, graded_at, canvas_posted, user_id)
-     VALUES ($1, $2, $3, $4, $5, 'manual', now(), false, $6)
+     VALUES ($1, $2, $3, $4, $5, 'manual', now(), $6, $7)
      ON CONFLICT (submission_id) DO UPDATE
        SET raw_score = EXCLUDED.raw_score, final_score = EXCLUDED.final_score,
            late_penalty = EXCLUDED.late_penalty, grader_comment = EXCLUDED.grader_comment,
-           graded_by = 'manual', graded_at = now()`,
-    [submission_id, score, finalScore, late_penalty ?? 0, comment ?? "", uid]
+           graded_by = 'manual', graded_at = now(), canvas_posted = $6`,
+    [submission_id, score, finalScore, late_penalty ?? 0, comment ?? "", posted, uid]
   );
 
   // Update submission workflow state
