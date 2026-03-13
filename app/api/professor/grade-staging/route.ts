@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
   if (!request_id || !action) {
     return NextResponse.json({ error: "Missing request_id or action" }, { status: 400 });
   }
-  const excludedSet = new Set<number>(excluded_ids ?? []);
+  const excludedSet = new Set<string>((excluded_ids ?? []).map(String));
 
   // Verify ownership
   const reqRows = await profQuery<{
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
     let skipped = 0;
     for (const sg of stagingGrades) {
       if (!sg.student_canvas_uid) continue;
-      if (excludedSet.has(sg.id)) { skipped++; continue; }
+      if (excludedSet.has(String(sg.id))) { skipped++; continue; }
       try {
         const isQuiz = sg.question_grades && sg.quiz_submission_id;
 
