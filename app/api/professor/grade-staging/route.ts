@@ -110,10 +110,10 @@ export async function POST(req: NextRequest) {
       id: number; submission_id: number | null; student_canvas_uid: number | null;
       final_score: string; raw_score: string; late_penalty: string; grader_comment: string;
       is_late: boolean; days_late: number;
-      question_grades: any[] | null; quiz_submission_id: number | null;
+      question_grades: any[] | null; quiz_submission_id: number | null; quiz_attempt: number | null;
     }>(
       `SELECT id, submission_id, student_canvas_uid, final_score, raw_score, late_penalty, grader_comment,
-              is_late, days_late, question_grades, quiz_submission_id
+              is_late, days_late, question_grades, quiz_submission_id, quiz_attempt
        FROM prof_grade_staging
        WHERE request_id = $1 AND user_id = $2 AND status = 'pending'`,
       [request_id, uid]
@@ -161,6 +161,7 @@ export async function POST(req: NextRequest) {
               headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
               body: JSON.stringify({
                 quiz_submissions: [{
+                  attempt: sg.quiz_attempt ?? 1,
                   questions: questionUpdates
                 }]
               }),
