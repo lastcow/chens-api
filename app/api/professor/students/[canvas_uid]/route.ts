@@ -56,6 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
     submission_id: number | null; score: number | null; final_score: number | null;
     late_penalty: number | null; grader_comment: string | null; canvas_comment_id: number | null;
     workflow_state: string | null; late: boolean | null; submitted_at: string | null;
+    days_late_calc: number | null;
     course_canvas_id: number; canvas_posted: boolean | null;
   }>(
     `SELECT a.course_id, a.id AS assignment_id, a.canvas_id AS assignment_canvas_id,
@@ -64,6 +65,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
             sub.id AS submission_id,
             g.raw_score AS score, g.final_score, g.late_penalty, g.grader_comment, g.canvas_comment_id,
             sub.workflow_state, sub.late, sub.submitted_at,
+            CASE WHEN sub.late = true AND sub.submitted_at IS NOT NULL AND a.due_at IS NOT NULL
+              THEN GREATEST(1, CEIL(EXTRACT(EPOCH FROM (sub.submitted_at - a.due_at)) / 86400))
+              ELSE NULL END AS days_late_calc,
             c.canvas_id AS course_canvas_id,
             g.canvas_posted
      FROM prof_assignments a
@@ -169,6 +173,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
           late_penalty: a.late_penalty,
           grader_comment: a.grader_comment,
           canvas_comment_id: a.canvas_comment_id ?? null,
+          days_late: quiz?.days_late ?? a.days_late_calc ?? null,
           workflow_state: a.workflow_state,
           late: a.late,
           submitted_at: a.submitted_at,
