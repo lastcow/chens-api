@@ -25,11 +25,15 @@ export async function GET(req: NextRequest) {
   const requestId = req.nextUrl.searchParams.get("request_id");
   if (!requestId) return NextResponse.json({ error: "Missing request_id" }, { status: 400 });
 
-  // Verify ownership
-  const reqRows = await profQuery(
-    `SELECT id FROM prof_requests WHERE id = $1 AND user_id = $2`, [requestId, uid]
+  // Verify ownership and fetch quiz_id
+  const reqRows = await profQuery<{ id: string; quiz_id: number | null }>(
+    `SELECT pr.id, pa.quiz_id
+     FROM prof_requests pr
+     JOIN prof_assignments pa ON pa.id = pr.assignment_id
+     WHERE pr.id = $1 AND pr.user_id = $2`, [requestId, uid]
   );
   if (!reqRows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const quizId = reqRows[0].quiz_id ?? null;
 
   const grades = await profQuery(
     `SELECT id, submission_id, student_name, student_canvas_uid, assignment_name,
@@ -40,7 +44,7 @@ export async function GET(req: NextRequest) {
      ORDER BY student_name`,
     [requestId, uid]
   );
-  return NextResponse.json({ grades });
+  return NextResponse.json({ grades, quiz_id: quizId });
 }
 
 // PATCH /api/professor/grade-staging — edit a single staging grade
