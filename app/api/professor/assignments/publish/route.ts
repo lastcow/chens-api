@@ -13,14 +13,13 @@ export async function POST(req: NextRequest) {
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
 
   try {
-    const { assignment_id, canvas_id } = await req.json();
+    const { assignment_id, due_at } = await req.json();
     if (!assignment_id) {
       return NextResponse.json({ error: "Missing assignment_id" }, { status: 400 });
     }
 
     const assignmentIdInt = parseInt(assignment_id);
-    // uid is a CUID string — do NOT parseInt
-    console.log(`Publish request: assignment_id=${assignmentIdInt}, uid=${uid}`);
+    console.log(`Publish request: assignment_id=${assignmentIdInt}, uid=${uid}, due_at=${due_at}`);
 
     const assignment = await profQuery(
       `SELECT a.id, a.canvas_id, a.user_id, a.published, c.canvas_id AS course_canvas_id
@@ -49,13 +48,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Canvas token not found. Please reconnect your Canvas account." }, { status: 400 });
     }
 
+    // Build Canvas assignment payload
+    const canvasPayload: Record<string, unknown> = { published: true };
+    if (due_at) canvasPayload.due_at = due_at;
+
     // Call Canvas API to publish the assignment
     const canvasRes = await fetch(
       `${CANVAS_BASE}/api/v1/courses/${course_canvas_id}/assignments/${assignmentCanvasId}`,
       {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ assignment: { published: true } }),
+        body: JSON.stringify({ assignment: canvasPayload }),
       }
     );
 
@@ -65,11 +68,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Canvas API error: ${canvasRes.status}` }, { status: 502 });
     }
 
-    // Update local DB to reflect published state
-    await profQuery(
-      `UPDATE prof_assignments SET published = true WHERE id = $1 AND user_id = $2`,
-      [assignmentIdInt, uid]
-    );
+    // Update local DB to reflect published state and due date
+    if (due_at) {
+      await profQuery(
+        `UPDATE prof_assignments SET published = true, due_at = $3 WHERE id = $1 AND user_id = $2`,
+        [assignmentIdInt, uid, due_at]
+      );
+    } else {
+      await profQuery(
+        `UPDATE prof_assignments SET published = true WHERE id = $1 AND user_id = $2`,
+        [assignmentIdInt, uid]
+      );
+    }
 
     console.log(`Assignment ${assignmentIdInt} (canvas_id=${assignmentCanvasId}) published successfully`);
     return NextResponse.json({ success: true, message: "Assignment published" }, { status: 200 });
