@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const assignments = await profQuery(`
     SELECT
-      a.id, a.canvas_id, a.name, a.points_possible, a.due_at, a.assignment_type, a.is_quiz,
+      a.id, a.canvas_id, a.name, a.description, a.points_possible, a.due_at, a.assignment_type, a.is_quiz, a.published,
       c.name AS course_name, c.canvas_id AS course_canvas_id,
       COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'graded' OR (g.id IS NOT NULL AND (sub.submitted_at IS NULL OR sub.submitted_at <= g.graded_at))) AS graded_count,
       COUNT(sub.id) FILTER (
@@ -55,11 +55,10 @@ export async function GET(req: NextRequest) {
       ) AS staging_request_id
     FROM prof_assignments a
     JOIN prof_courses c ON c.id = a.course_id AND c.user_id = $1
-    JOIN prof_enrollments e ON e.course_id = c.id AND e.user_id = $1
+    LEFT JOIN prof_enrollments e ON e.course_id = c.id AND e.user_id = $1
     LEFT JOIN prof_submissions sub ON sub.assignment_id = a.id AND sub.student_id = e.student_id
     LEFT JOIN prof_grades g ON g.submission_id = sub.id
     WHERE a.user_id = $1
-      AND a.published = true
       AND a.name NOT ILIKE '%progress report%'
       AND a.name NOT ILIKE '%attendance%'
       AND a.name NOT ILIKE '%roll call%'
