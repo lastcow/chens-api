@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const assignment = await profQuery(
       `SELECT a.id, a.user_id, a.published FROM prof_assignments a
        WHERE a.id = $1 AND a.user_id = $2`,
-      [assignment_id, uid]
+      [parseInt(assignment_id), uid]
     );
 
     if (!assignment || assignment.length === 0) {
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     // Update assignment to published
     await profQuery(
       `UPDATE prof_assignments SET published = true WHERE id = $1 AND user_id = $2`,
-      [assignment_id, uid]
+      [parseInt(assignment_id), uid]
     );
 
     return NextResponse.json({ success: true, message: "Assignment published" }, { status: 200 });
