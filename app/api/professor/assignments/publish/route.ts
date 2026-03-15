@@ -10,18 +10,20 @@ export async function POST(req: NextRequest) {
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
 
   try {
-    const { assignment_id } = await req.json();
+    const { assignment_id, canvas_id } = await req.json();
     if (!assignment_id) {
       return NextResponse.json({ error: "Missing assignment_id" }, { status: 400 });
     }
 
     const assignmentIdInt = parseInt(assignment_id);
+    const canvasIdInt = canvas_id ? parseInt(canvas_id) : null;
     const uidInt = parseInt(uid);
-    console.log(`Publish request: assignment_id=${assignmentIdInt}, uid=${uidInt} (from header: ${uid})`);
+    console.log(`Publish request: assignment_id=${assignmentIdInt}, canvas_id=${canvasIdInt}, uid=${uidInt}`);
 
     // Verify assignment exists and belongs to this user
+    // Use canvas_id for Canvas API operations
     const assignment = await profQuery(
-      `SELECT a.id, a.user_id, a.published FROM prof_assignments a
+      `SELECT a.id, a.canvas_id, a.user_id, a.published FROM prof_assignments a
        WHERE a.id = $1 AND a.user_id = $2`,
       [assignmentIdInt, uidInt]
     );
@@ -31,14 +33,14 @@ export async function POST(req: NextRequest) {
     if (!assignment || assignment.length === 0) {
       // Try to see if assignment exists at all
       const anyAssignment = await profQuery(
-        `SELECT a.id, a.user_id, a.published FROM prof_assignments a WHERE a.id = $1`,
+        `SELECT a.id, a.canvas_id, a.user_id, a.published FROM prof_assignments a WHERE a.id = $1`,
         [assignmentIdInt]
       );
       console.log(`Assignment exists in DB:`, anyAssignment);
       
       return NextResponse.json({ 
         error: "Assignment not found or you don't have permission to publish it",
-        debug: { assignment_id: assignmentIdInt, uid_sent: uid, uid_parsed: uidInt }
+        debug: { assignment_id: assignmentIdInt, canvas_id: canvasIdInt, uid_sent: uid, uid_parsed: uidInt }
       }, { status: 404 });
     }
 
