@@ -16,13 +16,14 @@ export async function POST(req: NextRequest) {
     }
 
     const assignmentIdInt = parseInt(assignment_id);
-    console.log(`Publish request: assignment_id=${assignmentIdInt}, uid=${uid}`);
+    const uidInt = parseInt(uid);
+    console.log(`Publish request: assignment_id=${assignmentIdInt}, uid=${uidInt} (from header: ${uid})`);
 
     // Verify assignment exists and belongs to this user
     const assignment = await profQuery(
       `SELECT a.id, a.user_id, a.published FROM prof_assignments a
        WHERE a.id = $1 AND a.user_id = $2`,
-      [assignmentIdInt, uid]
+      [assignmentIdInt, uidInt]
     );
 
     console.log(`Query result:`, assignment);
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
       
       return NextResponse.json({ 
         error: "Assignment not found or you don't have permission to publish it",
-        debug: { assignment_id: assignmentIdInt, uid }
+        debug: { assignment_id: assignmentIdInt, uid_sent: uid, uid_parsed: uidInt }
       }, { status: 404 });
     }
 
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     // Update assignment to published
     await profQuery(
       `UPDATE prof_assignments SET published = true WHERE id = $1 AND user_id = $2`,
-      [assignmentIdInt, uid]
+      [assignmentIdInt, uidInt]
     );
 
     console.log(`Assignment ${assignmentIdInt} published successfully`);
