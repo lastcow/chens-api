@@ -45,21 +45,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "order_id, product_name, original_price, match_price required" }, { status: 400 });
   }
 
-  // Auto-calculate expiry from pm_rules if not provided
+  // Calculate PM expiry from order date + pm_window_days (default 60 days)
+  // This reflects order eligibility (e.g. 60 days from purchase), not PM submission date
   let finalExpiry = expires_at ?? null;
   if (!finalExpiry) {
     const ruleRows = await profQuery<{ pm_window_days: number }>(
       `SELECT pm_window_days FROM msbiz_pm_rules WHERE user_id = $1`, [uid]
     );
-    const pmWindow = ruleRows[0]?.pm_window_days ?? 14;
-    const orderRows = await profQuery<{ order_date: string }>(
-      `SELECT order_date FROM msbiz_orders WHERE id = $1 AND user_id = $2`, [order_id, uid]
+    const pmWindow = ruleRows[0]?.pm_window_days ?? 60; // default 60 days from order
+    const orderRows = await profQuery<{ order_date: string; pm_deadline_at: string | null }>(
+      `SELECT order_date, pm_deadline_at FROM msbiz_orders WHERE id = $1 AND user_id = $2`, [order_id, uid]
     );
-    if (orderRows[0]?.order_date) {
-      const orderDate = new Date(orderRows[0].order_date);
-      orderDate.setDate(orderDate.getDate() + pmWindow);
-      finalExpiry = orderDate.toISOString();
+    if (orderRows[0]) {
+      // Use existing pm_deadline_at on order if set, otherwise calculate from order_date + window
+      if (orderRows[0].pm_deadline_at) {
+        finalExpiry = orderRows[0].pm_deadline_at;
+      } else {
+        const orderDate = new Date(orderRows[0].order_date);
+        orderDate.setDate(orderDate.getDate() + pmWindow);
+        finalExpiry = orderDate.toISOString();
+        // Also stamp pm_deadline_at on the order for future reference
+        await profQuery(
+          `UPDATE msbiz_orders SET pm_deadline_at = $1, updated_at = now() WHERE id = $2 AND user_id = $3`,
+          [finalExpiry, order_id, uid]
+        );
+      }
     }
+  }
+
+  // Check order is still eligible (not past window)
+  if (finalExpiry && new Date(finalExpiry) < new Date()) {
+    return NextResponse.json(
+      { error: "Order is no longer eligible for price match — the PM window has expired" },
+      { status: 400 }
+    );
   }
 
   const rows = await profQuery(
