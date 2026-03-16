@@ -16,6 +16,7 @@ const PRESETS: Record<string, string> = {
   feature_analytics: "elegant dashboard with animated charts and data visualization, gold accents",
   feature_cloud: "cloud infrastructure with connected servers and flowing data streams",
   feature_support: "headset with chat bubbles, customer support concept, warm lighting",
+  canvas_lms: "futuristic academic dashboard with glowing student profiles, assignment cards, AI grading wand, grade charts and university data streams, dark theme with gold and teal accents",
 };
 
 // POST /api/images/generate
