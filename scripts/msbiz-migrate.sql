@@ -203,8 +203,8 @@ CREATE INDEX IF NOT EXISTS idx_msbiz_pm_status ON msbiz_price_matches(status);
 CREATE TABLE IF NOT EXISTS msbiz_pm_rules (
   id                   TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id              TEXT NOT NULL UNIQUE,
-  pm_window_days       INT NOT NULL DEFAULT 60  -- days from order date for PM eligibility,
-  remind_days_before   INT NOT NULL DEFAULT 3   -- days before deadline to send reminder,
+  pm_window_days       INT NOT NULL DEFAULT 60,
+  remind_days_before   INT NOT NULL DEFAULT 3,
   notify_discord       BOOLEAN NOT NULL DEFAULT true,
   notify_email         BOOLEAN NOT NULL DEFAULT false,
   enabled              BOOLEAN NOT NULL DEFAULT true,
