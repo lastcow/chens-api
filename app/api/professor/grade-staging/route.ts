@@ -54,8 +54,17 @@ export async function PATCH(req: NextRequest) {
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
 
-  const { staging_id, raw_score, final_score, grader_comment, is_late, days_late, question_grades } = await req.json();
+  const { staging_id, raw_score, final_score, grader_comment, is_late, days_late, question_grades, _delete } = await req.json();
   if (!staging_id) return NextResponse.json({ error: "Missing staging_id" }, { status: 400 });
+
+  // Delete: remove staged record permanently
+  if (_delete) {
+    await profQuery(
+      `DELETE FROM prof_grade_staging WHERE id = $1 AND user_id = $2 AND status = 'pending'`,
+      [staging_id, uid]
+    );
+    return NextResponse.json({ ok: true, deleted: true });
+  }
 
   if (question_grades && Array.isArray(question_grades)) {
     // Quiz: recalculate total from per-question scores
