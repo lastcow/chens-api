@@ -14,9 +14,18 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q");
   if (!q || q.length < 3) return NextResponse.json({ predictions: [] });
 
+  if (!GOOGLE_MAPS_KEY) {
+    return NextResponse.json({ predictions: [], error: "Google Maps API key not configured" });
+  }
+
   const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&types=address&components=country:us&key=${GOOGLE_MAPS_KEY}`;
   const res = await fetch(url);
   const data = await res.json();
+
+  if (data.status && data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+    console.error("[msbiz/addresses/lookup] Google API error:", data.status, data.error_message);
+    return NextResponse.json({ predictions: [], google_status: data.status, google_error: data.error_message });
+  }
 
   return NextResponse.json({ predictions: data.predictions ?? [] });
 }
