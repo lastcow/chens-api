@@ -15,12 +15,12 @@ export async function GET(req: NextRequest) {
   const severity = p.get("severity");
   const status = p.get("status") ?? "open";
 
-  const conditions = [`e.user_id = $1`];
+  const conditions = [`user_id = $1`];
   const values: unknown[] = [uid];
   let idx = 2;
-  if (type)     { conditions.push(`e.type = $${idx++}`);     values.push(type); }
-  if (severity) { conditions.push(`e.severity = $${idx++}`); values.push(severity); }
-  if (status !== "all") { conditions.push(`e.status = $${idx++}`); values.push(status); }
+  if (type)     { conditions.push(`type = $${idx++}`);     values.push(type); }
+  if (severity) { conditions.push(`severity = $${idx++}`); values.push(severity); }
+  if (status !== "all") { conditions.push(`status = $${idx++}`); values.push(status); }
 
   const exceptions = await profQuery(
     `SELECT * FROM msbiz_exceptions WHERE ${conditions.join(" AND ")}
