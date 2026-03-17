@@ -94,6 +94,22 @@ export const MSBIZ_ROLE_PERMISSIONS: Record<string, Record<MsbizPermission, bool
     "reminders.manage": false,
     "admin.users": false, "admin.roles": false, "admin.invite": false, "admin.addresses": false,
   },
+  customer: {
+    // Customer — can view and create their own orders, track shipments, view their own accounts
+    "accounts.view": true, "accounts.manage": false,
+    "orders.view": true, "orders.create": true, "orders.edit": false, "orders.delete": false, "orders.import": false,
+    "addresses.view": false, "addresses.manage": false,
+    "warehouse.view": false, "warehouse.manage": false, "inventory.adjust": false,
+    "inbound.view": false, "inbound.manage": false,
+    "outbound.view": false, "outbound.manage": false,
+    "price_match.view": false, "price_match.manage": false,
+    "invoices.view": true, "invoices.manage": false, "invoices.qb_sync": false,
+    "exceptions.view": true, "exceptions.manage": false, "exceptions.resolve": false,
+    "costs.view": false, "costs.manage": false,
+    "tracking.view": true,
+    "reminders.manage": false,
+    "admin.users": false, "admin.roles": false, "admin.invite": false, "admin.addresses": false,
+  },
 };
 
 export async function getMsbizPermissions(userId: string): Promise<Record<string, boolean> | null> {
