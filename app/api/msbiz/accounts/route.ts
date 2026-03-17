@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   if (result instanceof NextResponse) return result;
   const { uid } = result;
 
-  const { email, password, display_name, notes, balance, owner_id, order_ids } = await req.json();
+  const { email, password, display_name, notes, balance, order_ids } = await req.json();
   if (!email || !password) return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
 
   const password_enc = encrypt(password);
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      RETURNING id, email, display_name, status, balance, owner_id, order_ids, created_at`,
     [uid, email.toLowerCase(), password_enc, display_name ?? null, notes ?? null,
-     balance ?? 0, owner_id ?? null, order_ids ? JSON.stringify(order_ids) : '[]']
+     balance ?? 0, uid, order_ids ? JSON.stringify(order_ids) : '[]']
   );
   return NextResponse.json({ account: rows[0] }, { status: 201 });
 }
