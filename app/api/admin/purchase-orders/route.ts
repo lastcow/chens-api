@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   const [rows, countRows] = await Promise.all([
     profQuery(
-      `SELECT po.id, po.po_number, po.requester_id, po.merchandise_id, po.qty,
+      `SELECT po.id, po.po_number, po.requester_id, po.merchandise_id, po.qty, po.completed_qty,
               po.required_price, po.deadline, po.warehouse_id, po.status, po.notes,
               po.created_at, po.updated_at,
               u.name AS requester_name, u.email AS requester_email,
