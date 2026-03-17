@@ -34,11 +34,13 @@ export async function GET(req: NextRequest) {
               po.created_at, po.updated_at,
               u.name AS requester_name, u.email AS requester_email,
               m.name AS merchandise_name, m.upc, m.model, m.image_url, m.price AS merchandise_price,
-              w.name AS warehouse_name
+              w.name AS warehouse_name,
+              a.full_address AS warehouse_address, a.contact_name AS warehouse_contact_name, a.contact_phone AS warehouse_contact_phone
        FROM purchase_orders po
        LEFT JOIN "User" u ON u.id = po.requester_id
        LEFT JOIN merchandise m ON m.id = po.merchandise_id
        LEFT JOIN msbiz_warehouses w ON w.id = po.warehouse_id
+       LEFT JOIN msbiz_addresses a ON a.id = w.address_id
        ${where}
        ORDER BY po.created_at DESC
        LIMIT $${idx} OFFSET $${idx + 1}`,
