@@ -18,6 +18,22 @@ export type MsbizPermission =
 
 // Default permission sets per role
 export const MSBIZ_ROLE_PERMISSIONS: Record<string, Record<MsbizPermission, boolean>> = {
+  pmer: {
+    // PM specialist — focuses on price match workflow, read-only on everything else
+    "accounts.view": true, "accounts.manage": false,
+    "orders.view": true, "orders.create": false, "orders.edit": false, "orders.delete": false, "orders.import": false,
+    "addresses.view": false, "addresses.manage": false,
+    "warehouse.view": false, "warehouse.manage": false, "inventory.adjust": false,
+    "inbound.view": false, "inbound.manage": false,
+    "outbound.view": false, "outbound.manage": false,
+    "price_match.view": true, "price_match.manage": true,
+    "invoices.view": false, "invoices.manage": false, "invoices.qb_sync": false,
+    "exceptions.view": true, "exceptions.manage": false, "exceptions.resolve": false,
+    "costs.view": false, "costs.manage": false,
+    "tracking.view": false,
+    "reminders.manage": false,
+    "admin.users": false, "admin.roles": false, "admin.invite": false, "admin.addresses": false,
+  },
   admin: {
     "accounts.view": true, "accounts.manage": true,
     "orders.view": true, "orders.create": true, "orders.edit": true, "orders.delete": true, "orders.import": true,
