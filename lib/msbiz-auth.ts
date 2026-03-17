@@ -108,6 +108,9 @@ export async function requireMsbizPermission(
 ): Promise<{ uid: string } | NextResponse> {
   const uid = req.headers.get("x-user-id");
   if (!uid) return NextResponse.json({ error: "Missing x-user-id" }, { status: 400 });
+  // System-level ADMINs bypass all msbiz permission checks
+  const role = req.headers.get("x-user-role");
+  if (role === "ADMIN") return { uid };
   const allowed = await hasMsbizPermission(uid, permission);
   if (!allowed) return msbizForbidden(permission);
   return { uid };
