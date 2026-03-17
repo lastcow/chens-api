@@ -20,15 +20,24 @@ export async function GET(req: NextRequest) {
   let idx = 1;
 
   if (search) {
-    conditions.push(`(name ILIKE $${idx} OR upc ILIKE $${idx} OR model ILIKE $${idx} OR description ILIKE $${idx})`);
-    values.push(`%${search}%`); idx++;
+    // Full-text search via tsvector; also prefix-match UPC/model for exact code lookups
+    conditions.push(
+      `(search_vec @@ plainto_tsquery('english', $${idx}) ` +
+      `OR name ILIKE $${idx + 1} OR upc ILIKE $${idx + 1} OR model ILIKE $${idx + 1})`
+    );
+    values.push(search, `%${search}%`);
+    idx += 2;
   }
   if (status) { conditions.push(`status = $${idx++}`); values.push(status); }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
+  const orderBy = search
+    ? `ORDER BY ts_rank(search_vec, plainto_tsquery('english', $1)) DESC, created_at DESC`
+    : `ORDER BY created_at DESC`;
+
   const [rows, countRows] = await Promise.all([
-    profQuery(`SELECT * FROM merchandise ${where} ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx+1}`,
+    profQuery(`SELECT * FROM merchandise ${where} ${orderBy} LIMIT $${idx} OFFSET $${idx+1}`,
       [...values, limit, offset]),
     profQuery(`SELECT COUNT(*) AS total FROM merchandise ${where}`, values),
   ]);
