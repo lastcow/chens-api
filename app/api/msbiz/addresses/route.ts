@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const isWarehouse = req.nextUrl.searchParams.get("is_warehouse");
 
   const addresses = await profQuery(
-    `SELECT * FROM msbiz_addresses
+    `SELECT *, street1 AS street FROM msbiz_addresses
      WHERE (user_id = $1 OR is_shared = true)
      ${isWarehouse !== null ? `AND is_warehouse = ${isWarehouse === "true"}` : ""}
      ORDER BY is_shared DESC, created_at DESC`,
@@ -31,14 +31,15 @@ export async function POST(req: NextRequest) {
   if (result instanceof NextResponse) return result;
   const { uid } = result;
 
-  const { label, full_address, street1, street2, city, state, zip, country, google_place_id, lat, lng, is_warehouse, contact_name, contact_phone } = await req.json();
+  const { label, full_address, street, street1, street2, city, state, zip, country, google_place_id, lat, lng, is_warehouse, contact_name, contact_phone } = await req.json();
   if (!full_address) return NextResponse.json({ error: "full_address is required" }, { status: 400 });
+  const streetVal = street ?? street1 ?? null; // accept both 'street' and 'street1'
 
   const rows = await profQuery(
     `INSERT INTO msbiz_addresses (user_id, label, full_address, street1, street2, city, state, zip, country, google_place_id, lat, lng, is_warehouse, contact_name, contact_phone)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-     RETURNING *`,
-    [uid, label ?? null, full_address, street1 ?? null, street2 ?? null, city ?? null, state ?? null, zip ?? null, country ?? "US", google_place_id ?? null, lat ?? null, lng ?? null, is_warehouse ?? false, contact_name ?? null, contact_phone ?? null]
+     RETURNING *, street1 AS street`,
+    [uid, label ?? null, full_address, streetVal, street2 ?? null, city ?? null, state ?? null, zip ?? null, country ?? "US", google_place_id ?? null, lat ?? null, lng ?? null, is_warehouse ?? false, contact_name ?? null, contact_phone ?? null]
   );
   return NextResponse.json({ address: rows[0] }, { status: 201 });
 }

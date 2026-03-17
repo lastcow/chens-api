@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     place: {
       full_address: result2.formatted_address,
-      street1: `${components.street_number ?? ""} ${components.route ?? ""}`.trim(),
+      street: `${components.street_number ?? ""} ${components.route ?? ""}`.trim(),
       city: components.locality || components.sublocality || components.neighborhood,
       state: components.state_short,
       zip: components.postal_code,
