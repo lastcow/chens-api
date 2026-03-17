@@ -29,7 +29,9 @@ export async function GET(req: NextRequest) {
 
   const [rows, countRows] = await Promise.all([
     profQuery(
-      `SELECT po.*, 
+      `SELECT po.id, po.po_number, po.requester_id, po.merchandise_id, po.qty,
+              po.required_price, po.deadline, po.warehouse_id, po.status, po.notes,
+              po.created_at, po.updated_at,
               u.name AS requester_name, u.email AS requester_email,
               m.name AS merchandise_name, m.upc, m.model, m.image_url, m.price AS merchandise_price,
               w.name AS warehouse_name
@@ -64,10 +66,21 @@ export async function POST(req: NextRequest) {
   const { requester_id, merchandise_id, qty, required_price, deadline, warehouse_id, notes } = await req.json();
   if (!requester_id || !merchandise_id) return NextResponse.json({ error: "requester_id and merchandise_id are required" }, { status: 400 });
 
+  // Generate PO number: PO-YYYYMMDD-XXXX (retry on collision)
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  let po_number = "";
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const suffix = Math.floor(1000 + Math.random() * 9000).toString();
+    const candidate = `PO-${today}-${suffix}`;
+    const existing = await profQuery(`SELECT id FROM purchase_orders WHERE po_number = $1`, [candidate]);
+    if (!existing.length) { po_number = candidate; break; }
+  }
+  if (!po_number) return NextResponse.json({ error: "Failed to generate unique PO number" }, { status: 500 });
+
   const rows = await profQuery(
-    `INSERT INTO purchase_orders (requester_id, merchandise_id, qty, required_price, deadline, warehouse_id, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [requester_id, merchandise_id, qty ?? 1, required_price ?? null, deadline ?? null, warehouse_id ?? null, notes ?? null]
+    `INSERT INTO purchase_orders (po_number, requester_id, merchandise_id, qty, required_price, deadline, warehouse_id, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [po_number, requester_id, merchandise_id, qty ?? 1, required_price ?? null, deadline ?? null, warehouse_id ?? null, notes ?? null]
   );
   return NextResponse.json({ order: rows[0] }, { status: 201 });
 }
