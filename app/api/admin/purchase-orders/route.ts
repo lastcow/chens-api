@@ -22,8 +22,9 @@ export async function GET(req: NextRequest) {
   if (search) {
     conditions.push(
       `(po.search_vec @@ plainto_tsquery('english', $${idx}) ` +
-      `OR m.name ILIKE $${idx + 1} OR u.name ILIKE $${idx + 1} OR u.email ILIKE $${idx + 1} ` +
-      `OR po.po_number ILIKE $${idx + 1})`
+      `OR to_tsvector('english', coalesce(m.name,'')) @@ plainto_tsquery('english', $${idx}) ` +
+      `OR to_tsvector('english', coalesce(u.name,'') || ' ' || coalesce(u.email,'')) @@ plainto_tsquery('english', $${idx}) ` +
+      `OR po.po_number ILIKE $${idx + 1} OR u.email ILIKE $${idx + 1})`
     );
     values.push(search, `%${search}%`);
     idx += 2;
