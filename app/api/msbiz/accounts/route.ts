@@ -12,8 +12,13 @@ export async function GET(req: NextRequest) {
   if (result instanceof NextResponse) return result;
   const { uid } = result;
 
-  const accounts = await profQuery(
-    `SELECT a.id, a.email, a.display_name, a.status, a.notes, a.balance,
+  const canManage = await (await import("@/lib/msbiz-auth")).hasMsbizPermission(uid, "accounts.manage");
+  // Include password_enc only for users who can manage accounts (system ADMINs bypass already)
+  const roleHeader = req.headers.get("x-user-role");
+  const showPass = canManage || roleHeader === "ADMIN";
+
+  const rows = await profQuery<Record<string, unknown>>(
+    `SELECT a.id, a.email, a.password_enc, a.display_name, a.status, a.notes, a.balance,
             a.owner_id, a.order_ids, a.last_used_at, a.created_at, a.updated_at,
             u.name AS owner_name, u.email AS owner_email
      FROM msbiz_accounts a
@@ -22,6 +27,12 @@ export async function GET(req: NextRequest) {
      ORDER BY a.created_at DESC`,
     [uid]
   );
+
+  const accounts = rows.map(({ password_enc, ...rest }) => ({
+    ...rest,
+    ...(showPass && password_enc ? { password: decrypt(String(password_enc)) } : {}),
+  }));
+
   return NextResponse.json({ accounts });
 }
 
