@@ -20,12 +20,21 @@ export async function GET(req: NextRequest) {
   let idx = 1;
 
   if (search) {
-    conditions.push(`(m.name ILIKE $${idx} OR u.name ILIKE $${idx} OR u.email ILIKE $${idx})`);
-    values.push(`%${search}%`); idx++;
+    conditions.push(
+      `(po.search_vec @@ plainto_tsquery('english', $${idx}) ` +
+      `OR m.name ILIKE $${idx + 1} OR u.name ILIKE $${idx + 1} OR u.email ILIKE $${idx + 1} ` +
+      `OR po.po_number ILIKE $${idx + 1})`
+    );
+    values.push(search, `%${search}%`);
+    idx += 2;
   }
   if (status) { conditions.push(`po.status = $${idx++}`); values.push(status); }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const orderBy = search
+    ? `ORDER BY ts_rank(po.search_vec, plainto_tsquery('english', $2)) DESC, po.created_at DESC`
+    : `ORDER BY po.created_at DESC`;
 
   const [rows, countRows] = await Promise.all([
     profQuery(
@@ -41,8 +50,7 @@ export async function GET(req: NextRequest) {
        LEFT JOIN merchandise m ON m.id = po.merchandise_id
        LEFT JOIN msbiz_warehouses w ON w.id = po.warehouse_id
        LEFT JOIN msbiz_addresses a ON a.id = w.address_id
-       ${where}
-       ORDER BY po.created_at DESC
+       ${where} ${orderBy}
        LIMIT $${idx} OFFSET $${idx + 1}`,
       [...values, limit, offset]
     ),
