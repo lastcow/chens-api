@@ -14,6 +14,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Accept 'street' from frontend, map to 'street1' in DB
   if (body.street !== undefined && body.street1 === undefined) body.street1 = body.street;
+  // Accept 'name'/'phone' as aliases for contact_name/contact_phone
+  if (body.name !== undefined && body.contact_name === undefined) body.contact_name = body.name;
+  if (body.phone !== undefined && body.contact_phone === undefined) body.contact_phone = body.phone;
   const fields = ["label","full_address","street1","street2","city","state","zip","country","google_place_id","lat","lng","is_warehouse","contact_name","contact_phone"];
   const updates: string[] = [];
   const values: unknown[] = [];

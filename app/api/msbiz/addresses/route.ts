@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const isWarehouse = req.nextUrl.searchParams.get("is_warehouse");
 
   const addresses = await profQuery(
-    `SELECT *, street1 AS street FROM msbiz_addresses
+    `SELECT *, street1 AS street, contact_name AS name, contact_phone AS phone FROM msbiz_addresses
      WHERE (user_id = $1 OR is_shared = true)
      ${isWarehouse !== null ? `AND is_warehouse = ${isWarehouse === "true"}` : ""}
      ORDER BY is_shared DESC, created_at DESC`,
@@ -31,7 +31,11 @@ export async function POST(req: NextRequest) {
   if (result instanceof NextResponse) return result;
   const { uid } = result;
 
-  const { label, full_address, street, street1, street2, city, state, zip, country, google_place_id, lat, lng, is_warehouse, contact_name, contact_phone } = await req.json();
+  const body = await req.json();
+  // Accept 'name'/'phone' as aliases for contact_name/contact_phone
+  const { label, full_address, street, street1, street2, city, state, zip, country, google_place_id, lat, lng, is_warehouse } = body;
+  const contact_name = body.contact_name ?? body.name ?? null;
+  const contact_phone = body.contact_phone ?? body.phone ?? null;
   if (!full_address) return NextResponse.json({ error: "full_address is required" }, { status: 400 });
   const streetVal = street ?? street1 ?? null; // accept both 'street' and 'street1'
 
