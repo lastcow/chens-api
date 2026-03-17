@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     `SELECT u.id, u.email, u.name, p.role_name
      FROM "User" u
      JOIN user_module_permissions p ON p.user_id = u.id AND p.module = 'msbiz'
+     WHERE (u.suspended IS NULL OR u.suspended = false)
      ORDER BY u.name ASC, u.email ASC`
   );
   return NextResponse.json({ users });
