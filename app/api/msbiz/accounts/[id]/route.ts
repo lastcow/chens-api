@@ -13,8 +13,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { uid } = result;
   const { id } = await params;
 
-  const rows = await profQuery<{ id: string; email: string; password_enc: string; display_name: string; status: string; notes: string }>(
-    `SELECT id, email, password_enc, display_name, status, notes, last_used_at, created_at FROM msbiz_accounts WHERE id = $1 AND user_id = $2`,
+  const rows = await profQuery<{ id: string; email: string; password_enc: string; display_name: string; status: string; notes: string; balance: number; owner_id: string; order_ids: string[]; owner_name: string; owner_email: string }>(
+    `SELECT a.id, a.email, a.password_enc, a.display_name, a.status, a.notes,
+            a.balance, a.owner_id, a.order_ids, a.last_used_at, a.created_at,
+            u.name AS owner_name, u.email AS owner_email
+     FROM msbiz_accounts a
+     LEFT JOIN "User" u ON u.id = a.owner_id
+     WHERE a.id = $1 AND a.user_id = $2`,
     [id, uid]
   );
   if (!rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -39,19 +44,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { uid } = result;
   const { id } = await params;
 
-  const { email, password, display_name, status, notes } = await req.json();
+  const { email, password, display_name, status, notes, balance, owner_id, order_ids } = await req.json();
   const password_enc = password ? encrypt(password) : null;
 
   await profQuery(
     `UPDATE msbiz_accounts SET
-       email = COALESCE($1, email),
+       email        = COALESCE($1, email),
        password_enc = COALESCE($2, password_enc),
        display_name = COALESCE($3, display_name),
-       status = COALESCE($4, status),
-       notes = COALESCE($5, notes),
-       updated_at = now()
-     WHERE id = $6 AND user_id = $7`,
-    [email ?? null, password_enc, display_name ?? null, status ?? null, notes ?? null, id, uid]
+       status       = COALESCE($4, status),
+       notes        = COALESCE($5, notes),
+       balance      = COALESCE($6, balance),
+       owner_id     = $7,
+       order_ids    = COALESCE($8, order_ids),
+       updated_at   = now()
+     WHERE id = $9 AND user_id = $10`,
+    [email?.toLowerCase() ?? null, password_enc, display_name ?? null, status ?? null,
+     notes ?? null, balance != null ? balance : null,
+     owner_id !== undefined ? (owner_id || null) : undefined,
+     order_ids ? JSON.stringify(order_ids) : null, id, uid]
   );
   return NextResponse.json({ ok: true });
 }
