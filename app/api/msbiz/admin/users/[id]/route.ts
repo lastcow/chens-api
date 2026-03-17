@@ -22,14 +22,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     finalPermissions = { ...(MSBIZ_ROLE_PERMISSIONS[role_name] ?? {}), ...permissions };
   }
 
+  const permJson = finalPermissions ? JSON.stringify(finalPermissions) : null;
+  const resolvedRole = role_name ?? "operator";
+
   await profQuery(
-    `UPDATE user_module_permissions
-     SET role_name = COALESCE($1, role_name),
-         permissions = COALESCE($2, permissions),
-         granted_by = $3,
-         updated_at = now()
-     WHERE user_id = $4 AND module = 'msbiz'`,
-    [role_name ?? null, finalPermissions ? JSON.stringify(finalPermissions) : null, uid, id]
+    `INSERT INTO user_module_permissions (user_id, module, role_name, permissions, granted_by)
+     VALUES ($1, 'msbiz', $2, COALESCE($3, '{}'), $4)
+     ON CONFLICT (user_id, module)
+     DO UPDATE SET
+       role_name   = COALESCE($2, user_module_permissions.role_name),
+       permissions = COALESCE($3::jsonb, user_module_permissions.permissions),
+       granted_by  = $4,
+       updated_at  = now()`,
+    [id, resolvedRole, permJson, uid]
   );
 
   return NextResponse.json({ ok: true });
