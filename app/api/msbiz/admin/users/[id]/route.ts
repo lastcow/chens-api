@@ -22,20 +22,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     finalPermissions = { ...(MSBIZ_ROLE_PERMISSIONS[role_name] ?? {}), ...permissions };
   }
 
-  const permJson = finalPermissions ? JSON.stringify(finalPermissions) : null;
   const resolvedRole = role_name ?? "operator";
 
-  await profQuery(
-    `INSERT INTO user_module_permissions (user_id, module, role_name, permissions, granted_by)
-     VALUES ($1, 'msbiz', $2, COALESCE($3, '{}'), $4)
-     ON CONFLICT (user_id, module)
-     DO UPDATE SET
-       role_name   = COALESCE($2, user_module_permissions.role_name),
-       permissions = COALESCE($3::jsonb, user_module_permissions.permissions),
-       granted_by  = $4,
-       updated_at  = now()`,
-    [id, resolvedRole, permJson, uid]
-  );
+  if (finalPermissions) {
+    // Always pass as text and cast via to_json to avoid neon jsonb binding issues
+    await profQuery(
+      `INSERT INTO user_module_permissions (user_id, module, role_name, permissions, granted_by)
+       VALUES ($1, 'msbiz', $2, $3, $4)
+       ON CONFLICT (user_id, module)
+       DO UPDATE SET
+         role_name   = $2,
+         permissions = $3,
+         granted_by  = $4,
+         updated_at  = now()`,
+      [id, resolvedRole, finalPermissions, uid]
+    );
+  } else {
+    // Just update role, keep existing permissions
+    await profQuery(
+      `INSERT INTO user_module_permissions (user_id, module, role_name, permissions, granted_by)
+       VALUES ($1, 'msbiz', $2, '{}', $3)
+       ON CONFLICT (user_id, module)
+       DO UPDATE SET role_name = $2, granted_by = $3, updated_at = now()`,
+      [id, resolvedRole, uid]
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }
