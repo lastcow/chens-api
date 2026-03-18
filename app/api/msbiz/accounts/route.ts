@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     values.push(search, `%${search}%`);
     idx += 2;
   }
-  if (status) { conditions.push(`a.status = $${idx++}`); values.push(status); }
+  if (status) { conditions.push(`a.status ILIKE $${idx++}`); values.push(status); }
 
   const where = `WHERE ${conditions.join(" AND ")}`;
   const orderBy = search
