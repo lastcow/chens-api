@@ -14,11 +14,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ permissions: ["*"], isAdmin: true });
   }
 
-  const rows = await profQuery<{ permissions: string[] }>(
+  const rows = await profQuery<{ permissions: Record<string, boolean> | string[] }>(
     `SELECT permissions FROM user_module_permissions WHERE user_id = $1 AND module = 'msbiz' LIMIT 1`,
     [uid]
   );
 
-  const permissions: string[] = rows[0]?.permissions ?? [];
+  const raw = rows[0]?.permissions ?? [];
+  // DB stores permissions as JSONB object { "perm.name": true/false }
+  // Normalise to a string[] of granted permissions
+  let permissions: string[];
+  if (Array.isArray(raw)) {
+    permissions = raw;
+  } else if (raw && typeof raw === "object") {
+    permissions = Object.entries(raw).filter(([, v]) => v === true).map(([k]) => k);
+  } else {
+    permissions = [];
+  }
+
   return NextResponse.json({ permissions });
 }
