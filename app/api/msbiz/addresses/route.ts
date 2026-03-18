@@ -14,10 +14,12 @@ export async function GET(req: NextRequest) {
   const isWarehouse = req.nextUrl.searchParams.get("is_warehouse");
 
   const addresses = await profQuery(
-    `SELECT *, street1 AS street, contact_name AS name, contact_phone AS phone FROM msbiz_addresses
-     WHERE (user_id = $1 OR is_shared = true)
-     ${isWarehouse !== null ? `AND is_warehouse = ${isWarehouse === "true"}` : ""}
-     ORDER BY is_shared DESC, created_at DESC`,
+    `SELECT DISTINCT a.*, a.street1 AS street, a.contact_name AS name, a.contact_phone AS phone
+     FROM msbiz_addresses a
+     LEFT JOIN address_shared_users s ON s.address_id = a.id AND s.user_id = $1
+     WHERE (a.user_id = $1 OR a.is_shared = true OR s.user_id IS NOT NULL)
+     ${isWarehouse !== null ? `AND a.is_warehouse = ${isWarehouse === "true"}` : ""}
+     ORDER BY a.is_shared DESC, a.created_at DESC`,
     [uid]
   );
   return NextResponse.json({ addresses });
