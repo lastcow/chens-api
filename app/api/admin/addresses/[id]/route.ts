@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiKey, requireAdminRole } from "@/lib/auth";
+import { requireApiKey, requireAdmin } from "@/lib/auth";
 import { profQuery } from "@/lib/prof-db";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const authErr = requireApiKey(_req) ?? requireAdminRole(_req);
+  const authErr = requireApiKey(_req) ?? requireAdmin(_req);
   if (authErr) return authErr;
   const { id } = await params;
 
@@ -28,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const authErr = requireApiKey(req) ?? requireAdminRole(req);
+  const authErr = requireApiKey(req) ?? requireAdmin(req);
   if (authErr) return authErr;
   const { id } = await params;
   const body = await req.json();
@@ -75,7 +75,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const authErr = requireApiKey(req) ?? requireAdminRole(req);
+  const authErr = requireApiKey(req) ?? requireAdmin(req);
   if (authErr) return authErr;
   const { id } = await params;
   // shared_users cascade-deletes via FK

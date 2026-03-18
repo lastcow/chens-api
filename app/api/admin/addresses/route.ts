@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiKey, requireAdminRole } from "@/lib/auth";
+import { requireApiKey, requireAdmin } from "@/lib/auth";
 import { profQuery } from "@/lib/prof-db";
 
 const LIMIT = 20;
 
 // GET /api/admin/addresses?search=&owner_id=&shared=&page=
 export async function GET(req: NextRequest) {
-  const authErr = requireApiKey(req) ?? requireAdminRole(req);
+  const authErr = requireApiKey(req) ?? requireAdmin(req);
   if (authErr) return authErr;
 
   const p       = req.nextUrl.searchParams;
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/admin/addresses
 export async function POST(req: NextRequest) {
-  const authErr = requireApiKey(req) ?? requireAdminRole(req);
+  const authErr = requireApiKey(req) ?? requireAdmin(req);
   if (authErr) return authErr;
 
   const body = await req.json();
