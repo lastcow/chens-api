@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
        FROM customer_merchandise cm
        JOIN "User" u ON u.id = cm.user_id
        JOIN merchandise m ON m.id = cm.merchandise_id
+       JOIN user_module_permissions p ON p.user_id = cm.user_id AND p.module = 'msbiz' AND p.role_name = 'customer'
        ${where}
        ORDER BY u.name ASC, m.name ASC
        LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
     profQuery(`SELECT COUNT(*) AS total FROM customer_merchandise cm
        JOIN "User" u ON u.id = cm.user_id
        JOIN merchandise m ON m.id = cm.merchandise_id
+       JOIN user_module_permissions p ON p.user_id = cm.user_id AND p.module = 'msbiz' AND p.role_name = 'customer'
        ${where}`, values),
   ]);
 
