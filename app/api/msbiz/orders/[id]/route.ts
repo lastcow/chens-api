@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
        WHERE o.id = $1 AND o.user_id = $2`,
       [id, uid]
     ),
-    profQuery(`SELECT * FROM msbiz_order_items WHERE order_id = $1 ORDER BY created_at ASC`, [id]),
+    profQuery(`SELECT oi.*, COALESCE(m.pm_eligible, true) AS pm_eligible, COALESCE(m.name, oi.name) AS name FROM msbiz_order_items oi LEFT JOIN merchandise m ON m.id = oi.merchandise_id WHERE oi.order_id = $1 ORDER BY oi.created_at ASC`, [id]),
     profQuery(`SELECT * FROM msbiz_price_matches WHERE order_id = $1 ORDER BY expires_at ASC`, [id]),
     profQuery(`SELECT * FROM msbiz_inbound WHERE order_id = $1 ORDER BY created_at DESC`, [id]),
     profQuery(`SELECT * FROM msbiz_exceptions WHERE ref_id = $1 AND ref_type = 'order' ORDER BY created_at DESC`, [id]),

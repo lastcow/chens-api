@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   let itemsMap: Record<string, unknown[]> = {};
   if (orderIds.length > 0) {
     const allItems = await profQuery(
-      `SELECT oi.*, COALESCE(m.pm_eligible, true) AS pm_eligible
+      `SELECT oi.*, COALESCE(m.pm_eligible, true) AS pm_eligible, COALESCE(m.name, oi.name) AS name
        FROM msbiz_order_items oi
        LEFT JOIN merchandise m ON m.id = oi.merchandise_id
        WHERE oi.order_id = ANY($1::text[])`,
