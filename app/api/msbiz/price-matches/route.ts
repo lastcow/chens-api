@@ -23,9 +23,11 @@ export async function GET(req: NextRequest) {
   if (urgent_only) { conditions.push(`pm.expires_at <= now() + INTERVAL '3 days' AND pm.status = 'pending'`); }
 
   const pms = await profQuery(
-    `SELECT pm.*, o.ms_order_number, o.order_date
+    `SELECT pm.*, o.ms_order_number, o.order_date,
+            oi.name AS item_name, oi.qty AS item_qty, oi.unit_price AS item_unit_price
      FROM msbiz_price_matches pm
      LEFT JOIN msbiz_orders o ON o.id = pm.order_id
+     LEFT JOIN msbiz_order_items oi ON oi.id = pm.order_item_id
      WHERE ${conditions.join(" AND ")}
      ORDER BY pm.expires_at ASC NULLS LAST, pm.created_at DESC`,
     values
@@ -40,9 +42,9 @@ export async function POST(req: NextRequest) {
   if (result instanceof NextResponse) return result;
   const { uid } = result;
 
-  const { order_id, order_item_ref, product_name, sku, original_price, match_price, match_source, match_source_url, expires_at, notes } = await req.json();
-  if (!order_id || !product_name || !original_price || !match_price) {
-    return NextResponse.json({ error: "order_id, product_name, original_price, match_price required" }, { status: 400 });
+  const { order_id, order_item_id, original_price, match_price, match_source, match_source_url, expires_at, notes } = await req.json();
+  if (!order_id || !original_price || !match_price) {
+    return NextResponse.json({ error: "order_id, original_price, match_price required" }, { status: 400 });
   }
 
   // Calculate PM expiry from order date + pm_window_days (default 60 days)
@@ -82,9 +84,9 @@ export async function POST(req: NextRequest) {
   }
 
   const rows = await profQuery(
-    `INSERT INTO msbiz_price_matches (user_id, order_id, order_item_ref, product_name, sku, original_price, match_price, match_source, match_source_url, expires_at, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-    [uid, order_id, order_item_ref ?? null, product_name, sku ?? null, original_price, match_price, match_source ?? null, match_source_url ?? null, finalExpiry, notes ?? null]
+    `INSERT INTO msbiz_price_matches (user_id, order_id, order_item_id, original_price, match_price, match_source, match_source_url, expires_at, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [uid, order_id, order_item_id ?? null, original_price, match_price, match_source ?? null, match_source_url ?? null, finalExpiry, notes ?? null]
   );
   return NextResponse.json({ price_match: rows[0] }, { status: 201 });
 }

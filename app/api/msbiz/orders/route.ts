@@ -48,8 +48,28 @@ export async function GET(req: NextRequest) {
     profQuery(`SELECT COUNT(*) AS total FROM msbiz_orders o WHERE ${where}`, values),
   ]);
 
+  // Fetch all items for these orders in one query
+  const orderIds = (orders as Record<string, unknown>[]).map(o => o.id as string);
+  let itemsMap: Record<string, unknown[]> = {};
+  if (orderIds.length > 0) {
+    const allItems = await profQuery(
+      `SELECT * FROM msbiz_order_items WHERE order_id = ANY($1::text[])`,
+      [orderIds]
+    );
+    for (const item of allItems as Record<string, unknown>[]) {
+      const oid = item.order_id as string;
+      if (!itemsMap[oid]) itemsMap[oid] = [];
+      itemsMap[oid].push(item);
+    }
+  }
+
+  const ordersWithItems = (orders as Record<string, unknown>[]).map(o => ({
+    ...o,
+    items: itemsMap[o.id as string] ?? [],
+  }));
+
   return NextResponse.json({
-    orders,
+    orders: ordersWithItems,
     total: parseInt(String(countRows[0]?.total ?? 0)),
     page,
     limit,
@@ -71,19 +91,34 @@ export async function POST(req: NextRequest) {
 
   const rows = await profQuery(
     `INSERT INTO msbiz_orders
-       (user_id, account_id, ms_order_number, order_date, items, subtotal, tax, shipping_cost, total, shipping_address_id, pm_deadline_at, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       (user_id, account_id, ms_order_number, order_date, subtotal, tax, shipping_cost, total, shipping_address_id, pm_deadline_at, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      RETURNING *`,
-    [uid, account_id, ms_order_number, order_date, JSON.stringify(items), subtotal, tax, shipping_cost, total, shipping_address_id ?? null, pm_deadline_at ?? null, notes ?? null]
+    [uid, account_id, ms_order_number, order_date, subtotal, tax, shipping_cost, total, shipping_address_id ?? null, pm_deadline_at ?? null, notes ?? null]
   );
+  const order = rows[0] as Record<string, unknown>;
+
+  // Insert order items
+  const insertedItems: unknown[] = [];
+  for (const item of items as { merchandise_id?: string; name: string; qty?: number; unit_price?: number }[]) {
+    if (!item.name) continue;
+    const itemRows = await profQuery(
+      `INSERT INTO msbiz_order_items (order_id, merchandise_id, name, qty, unit_price)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [order.id, item.merchandise_id ?? null, item.name, item.qty ?? 1, item.unit_price ?? 0]
+    );
+    insertedItems.push(itemRows[0]);
+  }
+
   // Insert shipping record if tracking info provided
   if (tracking_number) {
     await profQuery(
       `INSERT INTO msbiz_order_shipping (order_id, tracking_number, carrier, inbound_status)
        VALUES ($1, $2, $3, 'ordered')
        ON CONFLICT (order_id) DO UPDATE SET tracking_number = EXCLUDED.tracking_number, carrier = EXCLUDED.carrier, updated_at = now()`,
-      [rows[0].id, tracking_number, carrier ?? null]
+      [order.id, tracking_number, carrier ?? null]
     );
   }
-  return NextResponse.json({ order: rows[0] }, { status: 201 });
+
+  return NextResponse.json({ order: { ...order, items: insertedItems } }, { status: 201 });
 }

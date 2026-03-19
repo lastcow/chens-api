@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { uid } = result;
   const { id } = await params;
 
-  const [orderRows, pmRows, inboundRows, exceptionsRows] = await Promise.all([
+  const [orderRows, itemRows, pmRows, inboundRows, exceptionsRows] = await Promise.all([
     profQuery(
       `SELECT o.*,
               (SELECT COUNT(*) FROM msbiz_exceptions e WHERE e.ref_id = o.id AND e.ref_type = 'order')::int AS exception_count,
@@ -25,13 +25,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
        WHERE o.id = $1 AND o.user_id = $2`,
       [id, uid]
     ),
+    profQuery(`SELECT * FROM msbiz_order_items WHERE order_id = $1 ORDER BY created_at ASC`, [id]),
     profQuery(`SELECT * FROM msbiz_price_matches WHERE order_id = $1 ORDER BY expires_at ASC`, [id]),
     profQuery(`SELECT * FROM msbiz_inbound WHERE order_id = $1 ORDER BY created_at DESC`, [id]),
     profQuery(`SELECT * FROM msbiz_exceptions WHERE ref_id = $1 AND ref_type = 'order' ORDER BY created_at DESC`, [id]),
   ]);
 
   if (!orderRows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ order: orderRows[0], price_matches: pmRows, inbound: inboundRows, exceptions: exceptionsRows });
+  return NextResponse.json({
+    order: { ...(orderRows[0] as Record<string, unknown>), items: itemRows },
+    price_matches: pmRows,
+    inbound: inboundRows,
+    exceptions: exceptionsRows,
+  });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -43,7 +49,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
 
-  const editable = ["account_id","ms_order_number","order_date","status","items","subtotal","tax","shipping_cost","total","shipping_address_id","pm_status","pm_deadline_at","pm_amount","pm_submitted_at","notes"];
+  // items handled separately via msbiz_order_items table
+  const editable = ["account_id","ms_order_number","order_date","status","subtotal","tax","shipping_cost","total","shipping_address_id","pm_status","pm_deadline_at","pm_amount","pm_submitted_at","notes"];
   const shippingEditable = ["tracking_number","carrier","inbound_status"];
   // Auto-stamp pm_submitted_at when pm_status transitions to submitted
   if (body.pm_status === "submitted" && !body.pm_submitted_at) {
@@ -55,7 +62,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   for (const f of editable) {
     if (body[f] !== undefined) {
       updates.push(`${f} = $${idx++}`);
-      values.push(f === "items" ? JSON.stringify(body[f]) : body[f]);
+      values.push(body[f]);
     }
   }
   // Update shipping table for shipping fields
@@ -68,7 +75,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       shippingValues.push(body[f]);
     }
   }
-  if (!updates.length && !shippingUpdates.length) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+
+  // Handle items update if provided
+  if (Array.isArray(body.items)) {
+    await profQuery(`DELETE FROM msbiz_order_items WHERE order_id = $1`, [id]);
+    for (const item of body.items as { merchandise_id?: string; name: string; qty?: number; unit_price?: number }[]) {
+      if (!item.name) continue;
+      await profQuery(
+        `INSERT INTO msbiz_order_items (order_id, merchandise_id, name, qty, unit_price)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, item.merchandise_id ?? null, item.name, item.qty ?? 1, item.unit_price ?? 0]
+      );
+    }
+  }
+
+  if (!updates.length && !shippingUpdates.length && !Array.isArray(body.items)) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
   if (updates.length) {
     updates.push(`updated_at = now()`);
     values.push(id, uid);
