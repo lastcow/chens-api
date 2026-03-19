@@ -45,6 +45,8 @@ export async function GET(req: NextRequest) {
     profQuery<Record<string, unknown>>(
       `SELECT a.id, a.email, a.password_enc, a.display_name, a.status, a.notes, a.balance,
               a.owner_id, a.order_ids, a.last_used_at, a.created_at, a.updated_at,
+              (SELECT COUNT(*) FROM msbiz_orders o WHERE o.account_id = a.id) AS order_count,
+              (SELECT COUNT(*) FROM msbiz_orders o WHERE o.account_id = a.id AND o.pm_status IN ('submitted','approved')) AS pm_count,
               u.name AS owner_name, u.email AS owner_email
        FROM msbiz_accounts a
        LEFT JOIN "User" u ON u.id = a.owner_id
