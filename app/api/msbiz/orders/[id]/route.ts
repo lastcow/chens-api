@@ -40,6 +40,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json();
 
   const editable = ["account_id","ms_order_number","order_date","status","items","subtotal","tax","shipping_cost","total","shipping_address_id","tracking_number","carrier","pm_status","pm_deadline_at","pm_amount","pm_submitted_at","inbound_status","notes"];
+  // Auto-stamp pm_submitted_at when pm_status transitions to submitted
+  if (body.pm_status === "submitted" && !body.pm_submitted_at) {
+    body.pm_submitted_at = new Date().toISOString();
+  }
   const updates: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
