@@ -49,9 +49,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     [id, tracking_number, carrier]
   );
 
-  // Mirror onto orders for backward compat
+  // Mirror onto orders + advance status to at least "shipped" if not already further along
   await profQuery(
-    `UPDATE msbiz_orders SET tracking_number = $1, carrier = $2, updated_at = now() WHERE id = $3`,
+    `UPDATE msbiz_orders
+     SET tracking_number = $1, carrier = $2, inbound_status = 'ordered',
+         status = CASE WHEN status IN ('pending','processing') THEN 'shipped' ELSE status END,
+         updated_at = now()
+     WHERE id = $3`,
     [tracking_number, carrier, id]
   );
 
