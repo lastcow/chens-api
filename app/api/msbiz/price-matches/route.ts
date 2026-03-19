@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   if (urgent_only) { conditions.push(`pm.expires_at <= now() + INTERVAL '3 days' AND pm.status = 'pending'`); }
 
   const pms = await profQuery(
-    `SELECT pm.*, o.ms_order_number, o.order_date,
+    `SELECT pm.*, o.ms_order_number, o.order_date
      FROM msbiz_price_matches pm
      LEFT JOIN msbiz_orders o ON o.id = pm.order_id
      WHERE ${conditions.join(" AND ")}
