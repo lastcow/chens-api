@@ -102,6 +102,11 @@ export async function POST(req: NextRequest) {
           ? [mappedInbound, tracking_number, carrier ?? null, mappedStatus, ref_id, uid]
           : [mappedInbound, tracking_number, carrier ?? null, ref_id, uid]
       );
+      // Also update the shipping table
+      await profQuery(
+        `UPDATE msbiz_order_shipping SET inbound_status = $1, updated_at = now() WHERE order_id = $2`,
+        [mappedInbound, ref_id]
+      );
     } else if (ref_type === "outbound") {
       const statusMap: Record<string, string> = { delivered: "delivered", out_for_delivery: "shipped", in_transit: "shipped", failure: "exception" };
       const mapped = statusMap[latestStatus] ?? null;
