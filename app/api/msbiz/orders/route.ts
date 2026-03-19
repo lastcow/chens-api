@@ -33,9 +33,13 @@ export async function GET(req: NextRequest) {
 
   const [orders, countRows] = await Promise.all([
     profQuery(
-      `SELECT o.*, a.email AS account_email, a.display_name AS account_name
+      `SELECT o.*,
+              (SELECT COUNT(*) FROM msbiz_exceptions e WHERE e.ref_id = o.id AND e.ref_type = 'order')::int AS exception_count,
+              s.tracking_number, s.carrier, s.inbound_status,
+              a.email AS account_email, a.display_name AS account_name
        FROM msbiz_orders o
        LEFT JOIN msbiz_accounts a ON a.id = o.account_id
+       LEFT JOIN msbiz_order_shipping s ON s.order_id = o.id
        WHERE ${where}
        ORDER BY o.order_date DESC, o.created_at DESC
        LIMIT $${idx} OFFSET $${idx+1}`,
@@ -67,10 +71,19 @@ export async function POST(req: NextRequest) {
 
   const rows = await profQuery(
     `INSERT INTO msbiz_orders
-       (user_id, account_id, ms_order_number, order_date, items, subtotal, tax, shipping_cost, total, shipping_address_id, tracking_number, carrier, pm_deadline_at, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       (user_id, account_id, ms_order_number, order_date, items, subtotal, tax, shipping_cost, total, shipping_address_id, pm_deadline_at, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      RETURNING *`,
-    [uid, account_id, ms_order_number, order_date, JSON.stringify(items), subtotal, tax, shipping_cost, total, shipping_address_id ?? null, tracking_number ?? null, carrier ?? null, pm_deadline_at ?? null, notes ?? null]
+    [uid, account_id, ms_order_number, order_date, JSON.stringify(items), subtotal, tax, shipping_cost, total, shipping_address_id ?? null, pm_deadline_at ?? null, notes ?? null]
   );
+  // Insert shipping record if tracking info provided
+  if (tracking_number) {
+    await profQuery(
+      `INSERT INTO msbiz_order_shipping (order_id, tracking_number, carrier, inbound_status)
+       VALUES ($1, $2, $3, 'ordered')
+       ON CONFLICT (order_id) DO UPDATE SET tracking_number = EXCLUDED.tracking_number, carrier = EXCLUDED.carrier, updated_at = now()`,
+      [rows[0].id, tracking_number, carrier ?? null]
+    );
+  }
   return NextResponse.json({ order: rows[0] }, { status: 201 });
 }

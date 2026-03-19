@@ -13,9 +13,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { uid } = result;
   const { id } = await params;
 
-  const rows = await profQuery<{ id: string; email: string; password_enc: string; display_name: string; status: string; notes: string; balance: number; owner_id: string; order_ids: string[]; owner_name: string; owner_email: string }>(
+  const rows = await profQuery<{ id: string; email: string; password_enc: string; display_name: string; status: string; notes: string; balance: number; owner_id: string; owner_name: string; owner_email: string }>(
     `SELECT a.id, a.email, a.password_enc, a.display_name, a.status, a.notes,
-            a.balance, a.owner_id, a.order_ids, a.last_used_at, a.created_at,
+            a.balance, a.owner_id, a.last_used_at, a.created_at,
             u.name AS owner_name, u.email AS owner_email
      FROM msbiz_accounts a
      LEFT JOIN "User" u ON u.id = a.owner_id
@@ -44,7 +44,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { uid } = result;
   const { id } = await params;
 
-  const { email, password, display_name, status, notes, balance, owner_id, order_ids } = await req.json();
+  const { email, password, display_name, status, notes, balance, owner_id } = await req.json();
   const password_enc = password ? encrypt(password) : null;
 
   await profQuery(
@@ -56,13 +56,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
        notes        = COALESCE($5, notes),
        balance      = COALESCE($6, balance),
        owner_id     = $7,
-       order_ids    = COALESCE($8, order_ids),
        updated_at   = now()
-     WHERE id = $9 AND user_id = $10`,
+     WHERE id = $8 AND user_id = $9`,
     [email?.toLowerCase() ?? null, password_enc, display_name ?? null, status ?? null,
      notes ?? null, balance != null ? balance : null,
      owner_id !== undefined ? (owner_id || null) : undefined,
-     order_ids ? JSON.stringify(order_ids) : null, id, uid]
+     id, uid]
   );
   return NextResponse.json({ ok: true });
 }

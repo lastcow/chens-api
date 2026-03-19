@@ -36,12 +36,19 @@ export async function GET(req: NextRequest) {
   const quizId = reqRows[0].quiz_id ?? null;
 
   const grades = await profQuery(
-    `SELECT id, submission_id, student_name, student_canvas_uid, assignment_name,
-            course_name, raw_score, final_score, late_penalty, grader_comment, ai_model, status,
-            is_late, days_late, question_grades, quiz_submission_id
-     FROM prof_grade_staging
-     WHERE request_id = $1 AND user_id = $2
-     ORDER BY student_name`,
+    `SELECT gs.id, gs.submission_id, gs.student_canvas_uid,
+            ps.name AS student_name,
+            pa.title AS assignment_name,
+            pc.name AS course_name,
+            gs.raw_score, gs.final_score, gs.late_penalty, gs.grader_comment, gs.ai_model, gs.status,
+            gs.is_late, gs.days_late, gs.question_grades, gs.quiz_submission_id
+     FROM prof_grade_staging gs
+     LEFT JOIN prof_submissions sub ON sub.id = gs.submission_id
+     LEFT JOIN prof_students ps ON ps.canvas_uid = gs.student_canvas_uid
+     LEFT JOIN prof_assignments pa ON pa.id = sub.assignment_id
+     LEFT JOIN prof_courses pc ON pc.id = pa.course_id
+     WHERE gs.request_id = $1 AND gs.user_id = $2
+     ORDER BY ps.name`,
     [requestId, uid]
   );
   return NextResponse.json({ grades, quiz_id: quizId });

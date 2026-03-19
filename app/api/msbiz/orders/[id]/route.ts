@@ -13,11 +13,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const [orderRows, pmRows, inboundRows, exceptionsRows] = await Promise.all([
     profQuery(
-      `SELECT o.*, a.email AS account_email, a.display_name AS account_name,
+      `SELECT o.*,
+              (SELECT COUNT(*) FROM msbiz_exceptions e WHERE e.ref_id = o.id AND e.ref_type = 'order')::int AS exception_count,
+              s.tracking_number, s.carrier, s.inbound_status,
+              a.email AS account_email, a.display_name AS account_name,
               addr.full_address AS shipping_address
        FROM msbiz_orders o
        LEFT JOIN msbiz_accounts a ON a.id = o.account_id
        LEFT JOIN msbiz_addresses addr ON addr.id = o.shipping_address_id
+       LEFT JOIN msbiz_order_shipping s ON s.order_id = o.id
        WHERE o.id = $1 AND o.user_id = $2`,
       [id, uid]
     ),
@@ -39,7 +43,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
 
-  const editable = ["account_id","ms_order_number","order_date","status","items","subtotal","tax","shipping_cost","total","shipping_address_id","tracking_number","carrier","pm_status","pm_deadline_at","pm_amount","pm_submitted_at","inbound_status","notes"];
+  const editable = ["account_id","ms_order_number","order_date","status","items","subtotal","tax","shipping_cost","total","shipping_address_id","pm_status","pm_deadline_at","pm_amount","pm_submitted_at","notes"];
+  const shippingEditable = ["tracking_number","carrier","inbound_status"];
   // Auto-stamp pm_submitted_at when pm_status transitions to submitted
   if (body.pm_status === "submitted" && !body.pm_submitted_at) {
     body.pm_submitted_at = new Date().toISOString();
@@ -53,10 +58,36 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       values.push(f === "items" ? JSON.stringify(body[f]) : body[f]);
     }
   }
-  if (!updates.length) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
-  updates.push(`updated_at = now()`);
-  values.push(id, uid);
-  await profQuery(`UPDATE msbiz_orders SET ${updates.join(", ")} WHERE id = $${idx} AND user_id = $${idx+1}`, values);
+  // Update shipping table for shipping fields
+  const shippingUpdates: string[] = [];
+  const shippingValues: unknown[] = [];
+  let sidx = 1;
+  for (const f of shippingEditable) {
+    if (body[f] !== undefined) {
+      shippingUpdates.push(`${f} = $${sidx++}`);
+      shippingValues.push(body[f]);
+    }
+  }
+  if (!updates.length && !shippingUpdates.length) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  if (updates.length) {
+    updates.push(`updated_at = now()`);
+    values.push(id, uid);
+    await profQuery(`UPDATE msbiz_orders SET ${updates.join(", ")} WHERE id = $${idx} AND user_id = $${idx+1}`, values);
+  }
+  if (shippingUpdates.length) {
+    shippingUpdates.push(`updated_at = now()`);
+    shippingValues.push(id);
+    // Build upsert: ensure row exists then update
+    await profQuery(
+      `INSERT INTO msbiz_order_shipping (order_id) VALUES ($${shippingValues.length})
+       ON CONFLICT (order_id) DO NOTHING`,
+      [id]
+    );
+    await profQuery(
+      `UPDATE msbiz_order_shipping SET ${shippingUpdates.join(", ")} WHERE order_id = $${shippingValues.length}`,
+      shippingValues
+    );
+  }
   return NextResponse.json({ ok: true });
 }
 

@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const isWarehouse = req.nextUrl.searchParams.get("is_warehouse");
 
   const addresses = await profQuery(
-    `SELECT DISTINCT a.*, a.street1 AS street, a.contact_name AS name, a.contact_phone AS phone
+    `SELECT DISTINCT a.*, a.street1 AS street
      FROM msbiz_addresses a
      LEFT JOIN address_shared_users s ON s.address_id = a.id AND s.user_id = $1
      WHERE (a.user_id = $1 OR a.is_shared = true OR s.user_id IS NOT NULL)

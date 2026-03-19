@@ -73,20 +73,22 @@ export async function POST(req: NextRequest) {
 
   const { order_id } = shipping[0];
 
-  // Update shipping table
+  // Update shipping table (inbound_status lives here now)
   await profQuery(
     `UPDATE msbiz_order_shipping SET inbound_status = $1, updated_at = now() WHERE order_id = $2`,
     [inboundStatus, order_id]
   );
 
-  // Update order
-  await profQuery(
-    `UPDATE msbiz_orders
-     SET inbound_status = $1${orderStatus ? ", status = CASE WHEN status NOT IN ('delivered','confirmed') THEN $2 ELSE status END" : ""}
-       , updated_at = now()
-     WHERE id = ${orderStatus ? "$3" : "$2"}`,
-    orderStatus ? [inboundStatus, orderStatus, order_id] : [inboundStatus, order_id]
-  );
+  // Update order status only (inbound_status/tracking columns removed from msbiz_orders)
+  if (orderStatus) {
+    await profQuery(
+      `UPDATE msbiz_orders
+       SET status = CASE WHEN status NOT IN ('delivered','confirmed') THEN $1 ELSE status END,
+           updated_at = now()
+       WHERE id = $2`,
+      [orderStatus, order_id]
+    );
+  }
 
   // Store tracking event
   const details = (result.tracking_details as Record<string, unknown>[]) ?? [];

@@ -96,16 +96,19 @@ export async function POST(req: NextRequest) {
       const inboundMap: Record<string, string> = { delivered: "delivered", out_for_delivery: "out_for_delivery", in_transit: "in_transit", pre_transit: "ordered", failure: "in_transit", return_to_sender: "in_transit", error: "in_transit" };
       const mappedStatus   = orderStatusMap[latestStatus] ?? null;
       const mappedInbound  = inboundMap[latestStatus] ?? "ordered";
+      // Update order status only (shipping fields now live in msbiz_order_shipping)
+      if (mappedStatus) {
+        await profQuery(
+          `UPDATE msbiz_orders SET status = $1, updated_at = now() WHERE id = $2 AND user_id = $3`,
+          [mappedStatus, ref_id, uid]
+        );
+      }
+      // Update shipping table with inbound_status + tracking info
       await profQuery(
-        `UPDATE msbiz_orders SET inbound_status = $1, tracking_number = $2, carrier = $3${mappedStatus ? ", status = $4" : ""}, updated_at = now() WHERE id = ${mappedStatus ? "$5" : "$4"} AND user_id = ${mappedStatus ? "$6" : "$5"}`,
-        mappedStatus
-          ? [mappedInbound, tracking_number, carrier ?? null, mappedStatus, ref_id, uid]
-          : [mappedInbound, tracking_number, carrier ?? null, ref_id, uid]
-      );
-      // Also update the shipping table
-      await profQuery(
-        `UPDATE msbiz_order_shipping SET inbound_status = $1, updated_at = now() WHERE order_id = $2`,
-        [mappedInbound, ref_id]
+        `INSERT INTO msbiz_order_shipping (order_id, tracking_number, carrier, inbound_status)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (order_id) DO UPDATE SET tracking_number = EXCLUDED.tracking_number, carrier = EXCLUDED.carrier, inbound_status = EXCLUDED.inbound_status, updated_at = now()`,
+        [ref_id, tracking_number, carrier ?? null, mappedInbound]
       );
     } else if (ref_type === "outbound") {
       const statusMap: Record<string, string> = { delivered: "delivered", out_for_delivery: "shipped", in_transit: "shipped", failure: "exception" };

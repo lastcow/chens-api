@@ -28,13 +28,13 @@ export async function POST(req: NextRequest) {
   if (result instanceof NextResponse) return result;
   const { uid } = result;
 
-  const { name, address_id, owner_name, owner_contact, inbound_cost_per_unit = 0, outbound_cost_per_unit = 0, notes } = await req.json();
+  const { name, address_id, inbound_cost_per_unit = 0, outbound_cost_per_unit = 0, notes } = await req.json();
   if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
 
   const rows = await profQuery(
-    `INSERT INTO msbiz_warehouses (user_id, name, address_id, owner_name, owner_contact, inbound_cost_per_unit, outbound_cost_per_unit, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [uid, name, address_id ?? null, owner_name ?? null, owner_contact ?? null, inbound_cost_per_unit, outbound_cost_per_unit, notes ?? null]
+    `INSERT INTO msbiz_warehouses (user_id, name, address_id, inbound_cost_per_unit, outbound_cost_per_unit, notes)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [uid, name, address_id ?? null, inbound_cost_per_unit, outbound_cost_per_unit, notes ?? null]
   );
   return NextResponse.json({ warehouse: rows[0] }, { status: 201 });
 }
