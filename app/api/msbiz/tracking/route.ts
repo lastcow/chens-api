@@ -90,13 +90,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update parent record status
+    // Update parent record status + inbound_status + tracking info
     if (ref_type === "order") {
-      const statusMap: Record<string, string> = { delivered: "delivered", out_for_delivery: "shipped", in_transit: "shipped", pre_transit: "processing", failure: "exception", return_to_sender: "exception", error: "exception" };
-      const mapped = statusMap[latestStatus] ?? null;
-      if (mapped) {
-        await profQuery(`UPDATE msbiz_orders SET status = $1, updated_at = now() WHERE id = $2 AND user_id = $3`, [mapped, ref_id, uid]);
-      }
+      const orderStatusMap: Record<string, string> = { delivered: "delivered", out_for_delivery: "shipped", in_transit: "shipped", pre_transit: "processing", failure: "exception", return_to_sender: "exception", error: "exception" };
+      const inboundMap: Record<string, string> = { delivered: "delivered", out_for_delivery: "out_for_delivery", in_transit: "in_transit", pre_transit: "ordered", failure: "in_transit", return_to_sender: "in_transit", error: "in_transit" };
+      const mappedStatus   = orderStatusMap[latestStatus] ?? null;
+      const mappedInbound  = inboundMap[latestStatus] ?? "ordered";
+      await profQuery(
+        `UPDATE msbiz_orders SET inbound_status = $1, tracking_number = $2, carrier = $3${mappedStatus ? ", status = $4" : ""}, updated_at = now() WHERE id = ${mappedStatus ? "$5" : "$4"} AND user_id = ${mappedStatus ? "$6" : "$5"}`,
+        mappedStatus
+          ? [mappedInbound, tracking_number, carrier ?? null, mappedStatus, ref_id, uid]
+          : [mappedInbound, tracking_number, carrier ?? null, ref_id, uid]
+      );
     } else if (ref_type === "outbound") {
       const statusMap: Record<string, string> = { delivered: "delivered", out_for_delivery: "shipped", in_transit: "shipped", failure: "exception" };
       const mapped = statusMap[latestStatus] ?? null;
