@@ -25,7 +25,26 @@ export async function GET(req: NextRequest) {
   let idx = 2;
 
   if (status)     { conditions.push(`o.status = $${idx++}`);     values.push(status.startsWith("order.") ? status : `order.${status}`); }
-  if (pm_status)  { conditions.push(`o.pm_status = $${idx++}`);  values.push(pm_status.startsWith("pm.") ? pm_status : `pm.${pm_status}`); }
+  if (pm_status) {
+    const fullPmStatus = pm_status.startsWith("pm.") ? pm_status : `pm.${pm_status}`;
+    if (fullPmStatus === "pm.ineligible") {
+      // ineligible = stored as pm.ineligible OR (unpmed/null AND all items have pm_eligible=false)
+      conditions.push(`(
+        o.pm_status = 'pm.ineligible'
+        OR (
+          (o.pm_status = 'pm.unpmed' OR o.pm_status IS NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM msbiz_order_items oi
+            LEFT JOIN merchandise m ON m.id = oi.merchandise_id
+            WHERE oi.order_id = o.id AND COALESCE(m.pm_eligible, true) = true
+          )
+        )
+      )`);
+    } else {
+      conditions.push(`o.pm_status = $${idx++}`);
+      values.push(fullPmStatus);
+    }
+  }
   if (account_id) { conditions.push(`o.account_id = $${idx++}`); values.push(account_id); }
   if (search)     { conditions.push(`o.ms_order_number ILIKE $${idx++}`); values.push(`%${search}%`); }
 
