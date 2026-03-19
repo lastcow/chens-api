@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
   const status = p.get("status");
   const pm_status = p.get("pm_status");
+  const has_pm    = p.get("has_pm"); // "yes" | "no"
   const account_id = p.get("account_id");
   const search = p.get("search");
   const page = Math.max(1, parseInt(p.get("page") ?? "1"));
@@ -26,6 +27,8 @@ export async function GET(req: NextRequest) {
 
   if (status)     { conditions.push(`o.status = $${idx++}`);     values.push(status.startsWith("order.") ? status : `order.${status}`); }
   if (pm_status)  { conditions.push(`o.pm_status = $${idx++}`);  values.push(pm_status.startsWith("pm.") ? pm_status : `pm.${pm_status}`); }
+  if (has_pm === "yes") { conditions.push(`EXISTS (SELECT 1 FROM msbiz_price_matches pm WHERE pm.order_id = o.id)`); }
+  if (has_pm === "no")  { conditions.push(`NOT EXISTS (SELECT 1 FROM msbiz_price_matches pm WHERE pm.order_id = o.id)`); }
   if (account_id) { conditions.push(`o.account_id = $${idx++}`); values.push(account_id); }
   if (search)     { conditions.push(`o.ms_order_number ILIKE $${idx++}`); values.push(`%${search}%`); }
 
