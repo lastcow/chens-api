@@ -45,10 +45,12 @@ export async function GET(req: NextRequest) {
     profQuery<Record<string, unknown>>(
       `SELECT a.id, a.email, a.password_enc, a.display_name, a.status, a.notes, a.balance,
               a.owner_id, a.last_used_at, a.created_at, a.updated_at,
-              (SELECT COUNT(*) FROM msbiz_orders o WHERE o.account_id = a.id) AS order_count,
-              (SELECT COUNT(*) FROM msbiz_orders o WHERE o.account_id = a.id AND o.pm_status IN ('submitted','approved')) AS pm_count,
+              s.value AS status_value, s.label AS status_label, s.color_hex AS status_color,
+              (SELECT COUNT(*) FROM msbiz_orders o WHERE o.account_id = a.id)::int AS order_count,
+              (SELECT COUNT(*) FROM msbiz_orders o WHERE o.account_id = a.id AND o.pm_status IN ('submitted','approved'))::int AS pm_count,
               u.name AS owner_name, u.email AS owner_email
        FROM msbiz_accounts a
+       LEFT JOIN msbiz_statuses s ON s.id = a.status
        LEFT JOIN "User" u ON u.id = a.owner_id
        ${where} ${orderBy} LIMIT $${idx} OFFSET $${idx + 1}`,
       [...values, limit, offset]
@@ -82,16 +84,23 @@ export async function POST(req: NextRequest) {
   if (result instanceof NextResponse) return result;
   const { uid } = result;
 
-  const { email, password, display_name, notes, balance } = await req.json();
+  const { email, password, display_name, status, notes, balance } = await req.json();
   if (!email || !password) return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+
+  const statusId = status ?? "account.Ready";
+  // Validate status exists
+  const statusRows = await profQuery<{ id: string }>(
+    `SELECT id FROM msbiz_statuses WHERE id = $1`, [statusId]
+  );
+  if (!statusRows.length) return NextResponse.json({ error: `Invalid status: ${statusId}` }, { status: 400 });
 
   const password_enc = encrypt(password);
 
   const rows = await profQuery(
-    `INSERT INTO msbiz_accounts (user_id, email, password_enc, display_name, notes, balance, owner_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO msbiz_accounts (user_id, email, password_enc, display_name, status, notes, balance, owner_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      RETURNING id, email, display_name, status, balance, owner_id, created_at`,
-    [uid, email.toLowerCase(), password_enc, display_name ?? null, notes ?? null,
+    [uid, email.toLowerCase(), password_enc, display_name ?? null, statusId, notes ?? null,
      balance ?? 0, uid]
   );
   return NextResponse.json({ account: rows[0] }, { status: 201 });

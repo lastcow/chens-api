@@ -13,11 +13,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { uid } = result;
   const { id } = await params;
 
-  const rows = await profQuery<{ id: string; email: string; password_enc: string; display_name: string; status: string; notes: string; balance: number; owner_id: string; owner_name: string; owner_email: string }>(
+  const rows = await profQuery<{ id: string; email: string; password_enc: string; display_name: string; status: string; status_value: string; status_label: string; status_color: string; notes: string; balance: number; owner_id: string; owner_name: string; owner_email: string }>(
     `SELECT a.id, a.email, a.password_enc, a.display_name, a.status, a.notes,
             a.balance, a.owner_id, a.last_used_at, a.created_at,
+            s.value AS status_value, s.label AS status_label, s.color_hex AS status_color,
             u.name AS owner_name, u.email AS owner_email
      FROM msbiz_accounts a
+     LEFT JOIN msbiz_statuses s ON s.id = a.status
      LEFT JOIN "User" u ON u.id = a.owner_id
      WHERE a.id = $1 AND a.user_id = $2`,
     [id, uid]
@@ -45,6 +47,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   const { email, password, display_name, status, notes, balance, owner_id } = await req.json();
+
+  // Validate status if provided
+  if (status !== undefined && status !== null) {
+    const statusRows = await profQuery<{ id: string }>(
+      `SELECT id FROM msbiz_statuses WHERE id = $1`, [status]
+    );
+    if (!statusRows.length) return NextResponse.json({ error: `Invalid status: ${status}` }, { status: 400 });
+  }
+
   const password_enc = password ? encrypt(password) : null;
 
   await profQuery(
