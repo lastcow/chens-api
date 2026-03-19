@@ -58,10 +58,13 @@ export async function GET(req: NextRequest) {
     ),
   ]);
 
-  const accounts = rows.map(({ password_enc, ...rest }) => ({
-    ...rest,
-    ...(showPass && password_enc ? { password: decrypt(String(password_enc)) } : {}),
-  }));
+  const accounts = rows.map(({ password_enc, ...rest }) => {
+    let decryptedPassword: string | undefined;
+    if (showPass && password_enc) {
+      try { decryptedPassword = decrypt(String(password_enc)); } catch { /* key mismatch or corrupt */ }
+    }
+    return { ...rest, ...(decryptedPassword !== undefined ? { password: decryptedPassword } : {}) };
+  });
 
   return NextResponse.json({
     accounts,
