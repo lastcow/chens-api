@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     // Update parent record status + inbound_status + tracking info
     if (ref_type === "order") {
-      const orderStatusMap: Record<string, string> = { delivered: "delivered", out_for_delivery: "shipped", in_transit: "shipped", pre_transit: "processing", failure: "exception", return_to_sender: "exception", error: "exception" };
+      const orderStatusMap: Record<string, string> = { delivered: "order.delivered", out_for_delivery: "order.shipped", in_transit: "order.shipped", pre_transit: "order.processing", failure: "order.exception", return_to_sender: "order.exception", error: "order.exception" };
       const inboundMap: Record<string, string> = { delivered: "delivered", out_for_delivery: "out_for_delivery", in_transit: "in_transit", pre_transit: "ordered", failure: "in_transit", return_to_sender: "in_transit", error: "in_transit" };
       const mappedStatus   = orderStatusMap[latestStatus] ?? null;
       const mappedInbound  = inboundMap[latestStatus] ?? "ordered";

@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
   const values: unknown[] = [uid];
   let idx = 2;
 
-  if (status)     { conditions.push(`o.status = $${idx++}`);     values.push(status); }
-  if (pm_status)  { conditions.push(`o.pm_status = $${idx++}`);  values.push(pm_status); }
+  if (status)     { conditions.push(`o.status = $${idx++}`);     values.push(status.startsWith("order.") ? status : `order.${status}`); }
+  if (pm_status)  { conditions.push(`o.pm_status = $${idx++}`);  values.push(pm_status.startsWith("pm.") ? pm_status : `pm.${pm_status}`); }
   if (account_id) { conditions.push(`o.account_id = $${idx++}`); values.push(account_id); }
   if (search)     { conditions.push(`o.ms_order_number ILIKE $${idx++}`); values.push(`%${search}%`); }
 
@@ -36,10 +36,14 @@ export async function GET(req: NextRequest) {
       `SELECT o.*,
               (SELECT COUNT(*) FROM msbiz_exceptions e WHERE e.ref_id = o.id AND e.ref_type = 'order')::int AS exception_count,
               s.tracking_number, s.carrier, s.inbound_status,
-              a.email AS account_email, a.display_name AS account_name
+              a.email AS account_email, a.display_name AS account_name,
+              os.value AS status_value, os.label AS status_label, os.color_hex AS status_color,
+              ps.value AS pm_status_value, ps.label AS pm_status_label, ps.color_hex AS pm_status_color
        FROM msbiz_orders o
        LEFT JOIN msbiz_accounts a ON a.id = o.account_id
        LEFT JOIN msbiz_order_shipping s ON s.order_id = o.id
+       LEFT JOIN msbiz_statuses os ON os.id = o.status
+       LEFT JOIN msbiz_statuses ps ON ps.id = o.pm_status
        WHERE ${where}
        ORDER BY o.order_date DESC, o.created_at DESC
        LIMIT $${idx} OFFSET $${idx+1}`,

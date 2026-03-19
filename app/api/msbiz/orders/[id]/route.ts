@@ -17,11 +17,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
               (SELECT COUNT(*) FROM msbiz_exceptions e WHERE e.ref_id = o.id AND e.ref_type = 'order')::int AS exception_count,
               s.tracking_number, s.carrier, s.inbound_status,
               a.email AS account_email, a.display_name AS account_name,
-              addr.full_address AS shipping_address
+              addr.full_address AS shipping_address,
+              os.value AS status_value, os.label AS status_label, os.color_hex AS status_color,
+              ps.value AS pm_status_value, ps.label AS pm_status_label, ps.color_hex AS pm_status_color
        FROM msbiz_orders o
        LEFT JOIN msbiz_accounts a ON a.id = o.account_id
        LEFT JOIN msbiz_addresses addr ON addr.id = o.shipping_address_id
        LEFT JOIN msbiz_order_shipping s ON s.order_id = o.id
+       LEFT JOIN msbiz_statuses os ON os.id = o.status
+       LEFT JOIN msbiz_statuses ps ON ps.id = o.pm_status
        WHERE o.id = $1 AND o.user_id = $2`,
       [id, uid]
     ),
@@ -52,8 +56,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // items handled separately via msbiz_order_items table
   const editable = ["account_id","ms_order_number","order_date","status","subtotal","tax","shipping_cost","total","shipping_address_id","pm_status","pm_deadline_at","pm_amount","pm_submitted_at","notes"];
   const shippingEditable = ["tracking_number","carrier","inbound_status"];
+  // Normalize status values to full FK ids
+  if (body.status && !body.status.startsWith("order.")) body.status = `order.${body.status}`;
+  if (body.pm_status && !body.pm_status.startsWith("pm.")) body.pm_status = `pm.${body.pm_status}`;
   // Auto-stamp pm_submitted_at when pm_status transitions to submitted
-  if (body.pm_status === "submitted" && !body.pm_submitted_at) {
+  if (body.pm_status === "pm.submitted" && !body.pm_submitted_at) {
     body.pm_submitted_at = new Date().toISOString();
   }
   const updates: string[] = [];

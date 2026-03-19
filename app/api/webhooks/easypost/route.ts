@@ -11,13 +11,13 @@ function verifySignature(body: string, signature: string | null): boolean {
 }
 
 const ORDER_STATUS_MAP: Record<string, string> = {
-  delivered:          "delivered",
-  out_for_delivery:   "shipped",
-  in_transit:         "shipped",
-  pre_transit:        "shipped",
-  failure:            "exception",
-  return_to_sender:   "exception",
-  error:              "exception",
+  delivered:          "order.delivered",
+  out_for_delivery:   "order.shipped",
+  in_transit:         "order.shipped",
+  pre_transit:        "order.shipped",
+  failure:            "order.exception",
+  return_to_sender:   "order.exception",
+  error:              "order.exception",
 };
 
 const INBOUND_MAP: Record<string, string> = {
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
   if (orderStatus) {
     await profQuery(
       `UPDATE msbiz_orders
-       SET status = CASE WHEN status NOT IN ('delivered','confirmed') THEN $1 ELSE status END,
+       SET status = CASE WHEN status NOT IN ('order.delivered','order.confirmed') THEN $1 ELSE status END,
            updated_at = now()
        WHERE id = $2`,
       [orderStatus, order_id]
