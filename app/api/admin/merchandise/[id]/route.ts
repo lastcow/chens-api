@@ -21,7 +21,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
 
-  const editable = ["name","upc","model","description","price","cost","stock","unit","status","image_url","item_url"];
+  const editable = ["name","upc","model","description","price","cost","stock","unit","status","image_url","item_url","pm_eligible"];
   const updates: string[] = [];
   const values: unknown[] = [];
   let idx = 1;

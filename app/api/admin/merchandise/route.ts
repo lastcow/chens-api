@@ -51,15 +51,17 @@ export async function POST(req: NextRequest) {
   const adminErr = requireAdmin(req);
   if (adminErr) return adminErr;
 
-  const { name, upc, model, description, price, cost, stock, unit, status, image_url, item_url } = await req.json();
+  const body = await req.json();
+  const { name, upc, model, description, price, cost, stock, unit, status, image_url, item_url } = body;
   if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
   const rows = await profQuery(
-    `INSERT INTO merchandise (name, upc, model, description, price, cost, stock, unit, status, image_url, item_url)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    `INSERT INTO merchandise (name, upc, model, description, price, cost, stock, unit, status, image_url, item_url, pm_eligible)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [name, upc ?? null, model ?? null, description ?? null,
      price ?? 0, cost ?? null, stock ?? 0, unit ?? "unit",
-     status ?? "active", image_url ?? null, item_url ?? null]
+     status ?? "active", image_url ?? null, item_url ?? null,
+     body.pm_eligible !== undefined ? Boolean(body.pm_eligible) : true]
   );
   return NextResponse.json({ item: rows[0] }, { status: 201 });
 }
