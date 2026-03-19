@@ -57,7 +57,10 @@ export async function GET(req: NextRequest) {
   let itemsMap: Record<string, unknown[]> = {};
   if (orderIds.length > 0) {
     const allItems = await profQuery(
-      `SELECT * FROM msbiz_order_items WHERE order_id = ANY($1::text[])`,
+      `SELECT oi.*, COALESCE(m.pm_eligible, true) AS pm_eligible
+       FROM msbiz_order_items oi
+       LEFT JOIN merchandise m ON m.id = oi.merchandise_id
+       WHERE oi.order_id = ANY($1::text[])`,
       [orderIds]
     );
     for (const item of allItems as Record<string, unknown>[]) {
@@ -67,10 +70,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const ordersWithItems = (orders as Record<string, unknown>[]).map(o => ({
-    ...o,
-    items: itemsMap[o.id as string] ?? [],
-  }));
+  const ordersWithItems = (orders as Record<string, unknown>[]).map(o => {
+    const items = itemsMap[o.id as string] ?? [];
+    const allPmIneligible = items.length > 0 && (items as Record<string, unknown>[]).every(it => it.pm_eligible === false);
+    return { ...o, items, all_pm_ineligible: allPmIneligible };
+  });
 
   return NextResponse.json({
     orders: ordersWithItems,
