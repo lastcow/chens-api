@@ -21,11 +21,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
               (SELECT json_agg(json_build_object('name', oi.name, 'qty', oi.qty, 'unit_price', oi.unit_price))
                FROM msbiz_order_items oi
                WHERE oi.order_id = pm.order_id) AS items,
-              r.refund_amount, r.refund_type, r.reward_amount, r.user_id AS rewarded_to, r.created_at AS rewarded_at
+              pu.name AS pmer_name, pu.email AS pmer_email,
+              r.refund_amount, r.refund_type, r.reward_amount, r.rewarded_to, r.created_at AS rewarded_at
        FROM msbiz_price_matches pm
        LEFT JOIN msbiz_statuses s ON s.id = pm.status
        LEFT JOIN msbiz_orders o ON o.id = pm.order_id
        LEFT JOIN msbiz_accounts a ON a.id = o.account_id
+       LEFT JOIN "User" pu ON pu.id = pm.assigned_pmer_id
        LEFT JOIN msbiz_pm_rewards r ON r.pm_id = pm.id
        WHERE pm.id = $1 AND pm.user_id = $2`,
       [id, uid]
@@ -48,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { uid } = result;
     const { id } = await params;
 
-    const { refund_amount, refund_type, notes, rewarded_to } = await req.json();
+    const { refund_amount, refund_type, notes } = await req.json();
     if (!refund_amount || !refund_type) {
       return NextResponse.json({ error: "refund_amount and refund_type are required" }, { status: 400 });
     }
@@ -62,13 +64,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const rate = refund_type === "full" ? fullRate : partialRate;
     const reward_amount = parseFloat((Number(refund_amount) * rate).toFixed(2));
 
-    // Verify PM exists and belongs to user
-    const pmRows = await profQuery<{ order_id: string }>(
-      `SELECT order_id FROM msbiz_price_matches WHERE id = $1 AND user_id = $2`,
+    // Verify PM exists, belongs to user, get assigned pmer
+    const pmRows = await profQuery<{ order_id: string; assigned_pmer_id: string | null }>(
+      `SELECT order_id, assigned_pmer_id FROM msbiz_price_matches WHERE id = $1 AND user_id = $2`,
       [id, uid]
     );
     if (!pmRows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const { order_id } = pmRows[0];
+    const { order_id, assigned_pmer_id } = pmRows[0];
+    // Reward always goes to the assigned pmer (not the professor submitting)
+    const rewardRecipient = assigned_pmer_id ?? uid;
 
     // Update msbiz_price_matches — status + notes only (reward details live in msbiz_pm_rewards)
     await profQuery(
@@ -84,11 +88,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       [order_id, uid]
     );
 
-    // Insert into msbiz_pm_rewards
+    // Insert reward — always to assigned pmer
     await profQuery(
-      `INSERT INTO msbiz_pm_rewards (pm_id, user_id, order_id, refund_amount, refund_type, reward_amount, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, rewarded_to ?? uid, order_id, refund_amount, refund_type, reward_amount, notes ?? null]
+      `INSERT INTO msbiz_pm_rewards (pm_id, user_id, rewarded_to, order_id, refund_amount, refund_type, reward_amount, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, uid, rewardRecipient, order_id, refund_amount, refund_type, reward_amount, notes ?? null]
     );
 
     // Return updated PM with reward data from msbiz_pm_rewards
@@ -100,11 +104,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               (SELECT json_agg(json_build_object('name', oi.name, 'qty', oi.qty, 'unit_price', oi.unit_price))
                FROM msbiz_order_items oi
                WHERE oi.order_id = pm.order_id) AS items,
-              r.refund_amount, r.refund_type, r.reward_amount, r.user_id AS rewarded_to, r.created_at AS rewarded_at
+              pu.name AS pmer_name, pu.email AS pmer_email,
+              r.refund_amount, r.refund_type, r.reward_amount, r.rewarded_to, r.created_at AS rewarded_at
        FROM msbiz_price_matches pm
        LEFT JOIN msbiz_statuses s ON s.id = pm.status
        LEFT JOIN msbiz_orders o ON o.id = pm.order_id
        LEFT JOIN msbiz_accounts a ON a.id = o.account_id
+       LEFT JOIN "User" pu ON pu.id = pm.assigned_pmer_id
        LEFT JOIN msbiz_pm_rewards r ON r.pm_id = pm.id
        WHERE pm.id = $1`,
       [id]

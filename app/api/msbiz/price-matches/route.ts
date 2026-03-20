@@ -31,11 +31,13 @@ export async function GET(req: NextRequest) {
             a.email AS account_email, a.display_name AS account_name,
             (SELECT json_agg(json_build_object('name', oi.name, 'qty', oi.qty, 'unit_price', oi.unit_price))
              FROM msbiz_order_items oi WHERE oi.order_id = pm.order_id) AS items,
-            r.refund_amount, r.refund_type, r.reward_amount, r.user_id AS rewarded_to, r.created_at AS rewarded_at
+            pu.name AS pmer_name, pu.email AS pmer_email,
+            r.refund_amount, r.refund_type, r.reward_amount, r.rewarded_to, r.created_at AS rewarded_at
      FROM msbiz_price_matches pm
      LEFT JOIN msbiz_statuses s ON s.id = pm.status
      LEFT JOIN msbiz_orders o ON o.id = pm.order_id
      LEFT JOIN msbiz_accounts a ON a.id = o.account_id
+     LEFT JOIN "User" pu ON pu.id = pm.assigned_pmer_id
      LEFT JOIN msbiz_pm_rewards r ON r.pm_id = pm.id
      WHERE ${conditions.join(" AND ")}
      ORDER BY pm.expires_at ASC NULLS LAST, pm.created_at DESC`,
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
   if (result instanceof NextResponse) return result;
   const { uid } = result;
 
-  const { order_id, original_price, match_price, match_source, match_source_url, expires_at, notes } = await req.json();
+  const { order_id, assigned_pmer_id, original_price, match_price, match_source, match_source_url, expires_at, notes } = await req.json();
   if (!order_id || !original_price || !match_price) {
     return NextResponse.json({ error: "order_id, original_price, match_price required" }, { status: 400 });
   }
@@ -99,9 +101,9 @@ export async function POST(req: NextRequest) {
   }
 
   const rows = await profQuery(
-    `INSERT INTO msbiz_price_matches (user_id, order_id, original_price, match_price, match_source, match_source_url, expires_at, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [uid, order_id, original_price, match_price, match_source ?? null, match_source_url ?? null, finalExpiry, notes ?? null]
+    `INSERT INTO msbiz_price_matches (user_id, order_id, assigned_pmer_id, original_price, match_price, match_source, match_source_url, expires_at, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [uid, order_id, assigned_pmer_id ?? null, original_price, match_price, match_source ?? null, match_source_url ?? null, finalExpiry, notes ?? null]
   );
   return NextResponse.json({ price_match: rows[0] }, { status: 201 });
   } catch (err) {
