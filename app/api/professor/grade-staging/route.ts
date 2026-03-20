@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const grades = await profQuery(
     `SELECT gs.id, gs.submission_id, gs.student_canvas_uid,
             ps.name AS student_name,
-            pa.title AS assignment_name,
+            pa.name AS assignment_name,
             pc.name AS course_name,
             gs.raw_score, gs.final_score, gs.late_penalty, gs.grader_comment, gs.ai_model, gs.status,
             gs.is_late, gs.days_late, gs.question_grades, gs.quiz_submission_id
