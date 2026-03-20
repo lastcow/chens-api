@@ -19,7 +19,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
               o.ms_order_number, o.order_date,
               a.email AS account_email, a.display_name AS account_name,
               (SELECT json_agg(json_build_object('name', oi.name, 'qty', oi.qty, 'unit_price', oi.unit_price))
-               FROM msbiz_order_items oi WHERE oi.order_id = pm.order_id) AS items,
+               FROM msbiz_order_items oi
+               WHERE oi.order_id = pm.order_id
+               AND (pm.order_item_id IS NULL OR oi.id = pm.order_item_id)) AS items,
               r.refund_amount, r.refund_type, r.reward_amount, r.user_id AS rewarded_to, r.created_at AS rewarded_at
        FROM msbiz_price_matches pm
        LEFT JOIN msbiz_statuses s ON s.id = pm.status
@@ -97,7 +99,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               o.ms_order_number, o.order_date,
               a.email AS account_email, a.display_name AS account_name,
               (SELECT json_agg(json_build_object('name', oi.name, 'qty', oi.qty, 'unit_price', oi.unit_price))
-               FROM msbiz_order_items oi WHERE oi.order_id = pm.order_id) AS items,
+               FROM msbiz_order_items oi
+               WHERE oi.order_id = pm.order_id
+               AND (pm.order_item_id IS NULL OR oi.id = pm.order_item_id)) AS items,
               r.refund_amount, r.refund_type, r.reward_amount, r.user_id AS rewarded_to, r.created_at AS rewarded_at
        FROM msbiz_price_matches pm
        LEFT JOIN msbiz_statuses s ON s.id = pm.status
