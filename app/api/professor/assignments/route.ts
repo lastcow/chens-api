@@ -24,13 +24,6 @@ export async function GET(req: NextRequest) {
       COUNT(sub.id) FILTER (
         WHERE sub.workflow_state IN ('submitted','pending_review')
           AND (g.id IS NULL OR sub.submitted_at > g.graded_at)
-          AND NOT EXISTS (
-            SELECT 1 FROM prof_grade_staging pgs2
-            JOIN prof_requests pr2 ON pr2.id = pgs2.request_id
-            WHERE pr2.assignment_id = a.id AND pr2.user_id = $1
-              AND pr2.status NOT IN ('completed')
-              AND pgs2.submission_id = sub.id AND pgs2.status = 'pending'
-          )
       ) AS ungraded_count,
       COUNT(sub.id) FILTER (WHERE sub.workflow_state = 'unsubmitted' OR sub.submitted_at IS NULL) AS missing_count,
       ROUND(AVG(g.final_score)::numeric, 1) AS avg_score,

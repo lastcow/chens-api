@@ -64,12 +64,18 @@ export async function PATCH(req: NextRequest) {
   const { staging_id, raw_score, final_score, grader_comment, is_late, days_late, question_grades, _delete } = await req.json();
   if (!staging_id) return NextResponse.json({ error: "Missing staging_id" }, { status: 400 });
 
-  // Delete: remove staged record permanently
+  // Delete: remove staged record permanently, reset submission to submitted
   if (_delete) {
-    await profQuery(
-      `DELETE FROM prof_grade_staging WHERE id = $1 AND user_id = $2 AND status = 'pending'`,
+    const deleted = await profQuery<{ submission_id: number | null }>(
+      `DELETE FROM prof_grade_staging WHERE id = $1 AND user_id = $2 AND status = 'pending' RETURNING submission_id`,
       [staging_id, uid]
     );
+    if (deleted[0]?.submission_id) {
+      await profQuery(
+        `UPDATE prof_submissions SET workflow_state = 'submitted' WHERE id = $1 AND workflow_state = 'staged'`,
+        [deleted[0].submission_id]
+      );
+    }
     return NextResponse.json({ ok: true, deleted: true });
   }
 
@@ -253,12 +259,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, posted: stagingGrades.length - errors.length - skipped, skipped, errors });
 
   } else if (action === "reject") {
-    await profQuery(
+    // Get submission IDs before updating
+    const stagingRows = await profQuery<{ submission_id: number | null }>(
       `UPDATE prof_grade_staging SET status = 'rejected', updated_at = now()
-       WHERE request_id = $1 AND user_id = $2 AND status = 'pending'`,
+       WHERE request_id = $1 AND user_id = $2 AND status = 'pending' RETURNING submission_id`,
       [request_id, uid]
     );
-    // Note: prof_requests status is NOT changed — approve/reject only affect staging rows.
+    // Reset staged submissions back to submitted so they can be re-requested
+    const subIds = stagingRows.map(r => r.submission_id).filter(Boolean);
+    if (subIds.length > 0) {
+      await profQuery(
+        `UPDATE prof_submissions SET workflow_state = 'submitted' WHERE id = ANY($1::int[]) AND workflow_state = 'staged'`,
+        [subIds]
+      );
+    }
     return NextResponse.json({ ok: true });
   }
 
