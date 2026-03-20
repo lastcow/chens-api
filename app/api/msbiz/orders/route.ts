@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiKey } from "@/lib/auth";
 import { profQuery } from "@/lib/prof-db";
 import { requireMsbizPermission } from "@/lib/msbiz-auth";
+import { withDiscordAlert } from "@/lib/discord-alert";
 
 // GET /api/msbiz/orders
 export async function GET(req: NextRequest) {
+  return withDiscordAlert("/api/msbiz/orders GET", async () => {
   const authErr = requireApiKey(req);
   if (authErr) return authErr;
   const result = await requireMsbizPermission(req, "orders.view");
@@ -101,10 +103,12 @@ export async function GET(req: NextRequest) {
     page,
     limit,
   });
+  }); // end withDiscordAlert
 }
 
 // POST /api/msbiz/orders
 export async function POST(req: NextRequest) {
+  return withDiscordAlert("/api/msbiz/orders POST", async () => {
   const authErr = requireApiKey(req);
   if (authErr) return authErr;
   const result = await requireMsbizPermission(req, "orders.create");
@@ -148,4 +152,5 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ order: { ...order, items: insertedItems } }, { status: 201 });
+  }); // end withDiscordAlert
 }

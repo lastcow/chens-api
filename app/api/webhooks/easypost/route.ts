@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { profQuery } from "@/lib/prof-db";
+import { discordAlert } from "@/lib/discord-alert";
 
 const WEBHOOK_SECRET = process.env.EASYPOST_WEBHOOK_SECRET ?? "";
 
@@ -31,6 +32,7 @@ const INBOUND_MAP: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  try {
   const raw       = await req.text();
   const signature = req.headers.get("x-hmac-signature-256");
 
@@ -126,4 +128,9 @@ export async function POST(req: NextRequest) {
 
   console.log(`[EasyPost webhook] ${eventType} → order ${order_id}: ${status} (${inboundStatus})`);
   return NextResponse.json({ ok: true, order_id, status, inbound_status: inboundStatus });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await discordAlert({ title: "EasyPost Webhook Error", message: msg, path: "/api/webhooks/easypost" });
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
 }

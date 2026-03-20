@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiKey } from "@/lib/auth";
 import { profQuery } from "@/lib/prof-db";
 import { requireMsbizPermission } from "@/lib/msbiz-auth";
+import { discordAlert } from "@/lib/discord-alert";
 
 export async function GET(req: NextRequest) {
+  try {
   const authErr = requireApiKey(req);
   if (authErr) return authErr;
   const result = await requireMsbizPermission(req, "price_match.view");
@@ -31,9 +33,15 @@ export async function GET(req: NextRequest) {
     values
   );
   return NextResponse.json({ price_matches: pms });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await discordAlert({ title: "Price Matches GET Error", message: msg, path: "/api/msbiz/price-matches" });
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const authErr = requireApiKey(req);
   if (authErr) return authErr;
   const result = await requireMsbizPermission(req, "price_match.manage");
@@ -87,4 +95,9 @@ export async function POST(req: NextRequest) {
     [uid, order_id, original_price, match_price, match_source ?? null, match_source_url ?? null, finalExpiry, notes ?? null]
   );
   return NextResponse.json({ price_match: rows[0] }, { status: 201 });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await discordAlert({ title: "Price Matches POST Error", message: msg, path: "/api/msbiz/price-matches" });
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
 }
