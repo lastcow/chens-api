@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       `INSERT INTO msbiz_tracking_events
          (ref_id, ref_type, tracking_number, carrier, status, event_type, description, location, event_at)
        VALUES ($1,'order',$2,$3,$4,$5,$6,$7,$8)
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT (tracking_number, event_at, status) WHERE event_at IS NOT NULL DO NOTHING`,
       [order_id, trackingCode, carrier ?? null, status,
        d.status ?? null, d.message ?? null,
        loc ? `${loc.city ?? ""}, ${loc.state ?? ""}`.replace(/^,\s*/, "") : null,
