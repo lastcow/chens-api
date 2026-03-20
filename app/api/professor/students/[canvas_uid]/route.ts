@@ -86,9 +86,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
     assignment_name: string; question_grades: any; quiz_submission_id: number | null;
     days_late: number | null; is_late: boolean;
   }>(
-    `SELECT pgs.assignment_name, pgs.question_grades, pgs.quiz_submission_id,
+    `SELECT pa.name AS assignment_name, pgs.question_grades, pgs.quiz_submission_id,
             pgs.days_late, pgs.is_late
      FROM prof_grade_staging pgs
+     LEFT JOIN prof_submissions sub ON sub.id = pgs.submission_id
+     LEFT JOIN prof_assignments pa ON pa.id = sub.assignment_id
      WHERE pgs.student_canvas_uid = $1 AND pgs.user_id = $2
        AND pgs.question_grades IS NOT NULL
        AND pgs.status IN ('approved', 'pending')
@@ -99,7 +101,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ canv
   // Index quiz question grades by assignment name
   const quizMap = new Map<string, { question_grades: any; quiz_submission_id: number | null; days_late: number | null; is_late: boolean }>();
   for (const qg of quizGrades) {
-    if (!quizMap.has(qg.assignment_name)) {
+    if (qg.assignment_name && !quizMap.has(qg.assignment_name)) {
       quizMap.set(qg.assignment_name, qg);
     }
   }
