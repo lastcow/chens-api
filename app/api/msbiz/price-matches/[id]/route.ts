@@ -71,19 +71,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const partialOverRate = parseFloat(process.env.PM_PARTIAL_OVER_REFUND_AWARD    ?? "0.12");
     const partialRate     = parseFloat(process.env.PM_PARTIAL_REFUND_AWARD         ?? "0.10");
 
+    // 3-tier blended reward:
+    // < 25%  → entire amount × partialRate
+    // 25-99% → first 25% × partialRate + remainder × partialOverRate
+    // 100%   → entire amount × fullRate
     let refund_type: string;
-    let rate: number;
+    let reward_amount: number;
     if (refundRatio >= 1.0) {
       refund_type = "full";
-      rate = fullRate;
+      reward_amount = parseFloat((refundNum * fullRate).toFixed(2));
     } else if (refundRatio >= 0.25) {
       refund_type = "partial_over";
-      rate = partialOverRate;
+      const firstPart = originalPrice * 0.25;
+      const overPart  = refundNum - firstPart;
+      reward_amount = parseFloat((firstPart * partialRate + overPart * partialOverRate).toFixed(2));
     } else {
       refund_type = "partial";
-      rate = partialRate;
+      reward_amount = parseFloat((refundNum * partialRate).toFixed(2));
     }
-    const reward_amount = parseFloat((refundNum * rate).toFixed(2));
 
     // Verify PM exists, belongs to user, get assigned pmer
     const pmRows = await profQuery<{ order_id: string; assigned_pmer_id: string | null }>(
