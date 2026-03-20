@@ -30,11 +30,13 @@ export async function GET(req: NextRequest) {
             o.ms_order_number, o.order_date,
             a.email AS account_email, a.display_name AS account_name,
             (SELECT json_agg(json_build_object('name', oi.name, 'qty', oi.qty, 'unit_price', oi.unit_price))
-             FROM msbiz_order_items oi WHERE oi.order_id = pm.order_id) AS items
+             FROM msbiz_order_items oi WHERE oi.order_id = pm.order_id) AS items,
+            r.refund_amount, r.refund_type, r.reward_amount, r.user_id AS rewarded_to, r.created_at AS rewarded_at
      FROM msbiz_price_matches pm
      LEFT JOIN msbiz_statuses s ON s.id = pm.status
      LEFT JOIN msbiz_orders o ON o.id = pm.order_id
      LEFT JOIN msbiz_accounts a ON a.id = o.account_id
+     LEFT JOIN msbiz_pm_rewards r ON r.pm_id = pm.id
      WHERE ${conditions.join(" AND ")}
      ORDER BY pm.expires_at ASC NULLS LAST, pm.created_at DESC`,
     values
