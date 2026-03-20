@@ -20,13 +20,16 @@ export async function GET(req: NextRequest) {
   const conditions = [`pm.user_id = $1`];
   const values: unknown[] = [uid];
   let idx = 2;
-  if (status)      { conditions.push(`pm.status = $${idx++}`);    values.push(status); }
+  if (status)      { const fullStatus = status.startsWith("price_match.") ? status : `price_match.${status}`; conditions.push(`pm.status = $${idx++}`); values.push(fullStatus); }
   if (order_id)    { conditions.push(`pm.order_id = $${idx++}`);  values.push(order_id); }
-  if (urgent_only) { conditions.push(`pm.expires_at <= now() + INTERVAL '3 days' AND pm.status = 'pending'`); }
+  if (urgent_only) { conditions.push(`pm.expires_at <= now() + INTERVAL '3 days' AND pm.status = 'price_match.pending'`); }
 
   const pms = await profQuery(
-    `SELECT pm.*, o.ms_order_number, o.order_date
+    `SELECT pm.*,
+            s.value AS status_value, s.label AS status_label, s.color_hex AS status_color,
+            o.ms_order_number, o.order_date
      FROM msbiz_price_matches pm
+     LEFT JOIN msbiz_statuses s ON s.id = pm.status
      LEFT JOIN msbiz_orders o ON o.id = pm.order_id
      WHERE ${conditions.join(" AND ")}
      ORDER BY pm.expires_at ASC NULLS LAST, pm.created_at DESC`,
