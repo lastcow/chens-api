@@ -27,10 +27,14 @@ export async function GET(req: NextRequest) {
   const pms = await profQuery(
     `SELECT pm.*,
             s.value AS status_value, s.label AS status_label, s.color_hex AS status_color,
-            o.ms_order_number, o.order_date
+            o.ms_order_number, o.order_date,
+            a.email AS account_email, a.display_name AS account_name,
+            (SELECT json_agg(json_build_object('name', oi.name, 'qty', oi.qty, 'unit_price', oi.unit_price))
+             FROM msbiz_order_items oi WHERE oi.order_id = pm.order_id) AS items
      FROM msbiz_price_matches pm
      LEFT JOIN msbiz_statuses s ON s.id = pm.status
      LEFT JOIN msbiz_orders o ON o.id = pm.order_id
+     LEFT JOIN msbiz_accounts a ON a.id = o.account_id
      WHERE ${conditions.join(" AND ")}
      ORDER BY pm.expires_at ASC NULLS LAST, pm.created_at DESC`,
     values
