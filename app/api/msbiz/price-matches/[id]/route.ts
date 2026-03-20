@@ -120,6 +120,47 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const authErr = requireApiKey(req);
+    if (authErr) return authErr;
+    const result = await requireMsbizPermission(req, "price_match.manage");
+    if (result instanceof NextResponse) return result;
+    const { uid } = result;
+    const { id } = await params;
+
+    // Get order_id before deleting
+    const pmRows = await profQuery<{ order_id: string }>(
+      `SELECT order_id FROM msbiz_price_matches WHERE id = $1 AND user_id = $2`,
+      [id, uid]
+    );
+    if (!pmRows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const { order_id } = pmRows[0];
+
+    // Delete PM record (cascades to msbiz_pm_rewards)
+    await profQuery(`DELETE FROM msbiz_price_matches WHERE id = $1 AND user_id = $2`, [id, uid]);
+
+    // Check if any PM records remain for this order
+    const remaining = await profQuery<{ cnt: string }>(
+      `SELECT COUNT(*) AS cnt FROM msbiz_price_matches WHERE order_id = $1 AND user_id = $2`,
+      [order_id, uid]
+    );
+    // If no PM records left, reset order pm_status to unpmed
+    if (parseInt(remaining[0].cnt) === 0) {
+      await profQuery(
+        `UPDATE msbiz_orders SET pm_status = 'pm.unpmed', updated_at = now() WHERE id = $1 AND user_id = $2`,
+        [order_id, uid]
+      );
+    }
+
+    return NextResponse.json({ ok: true, order_id, pm_reset: parseInt(remaining[0].cnt) === 0 });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await discordAlert({ title: "PM DELETE Error", message: msg, path: "/api/msbiz/price-matches/[id]" });
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const authErr = requireApiKey(req);
   if (authErr) return authErr;
