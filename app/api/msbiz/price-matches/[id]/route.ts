@@ -50,19 +50,40 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { uid } = result;
     const { id } = await params;
 
-    const { refund_amount, refund_type, notes } = await req.json();
-    if (!refund_amount || !refund_type) {
-      return NextResponse.json({ error: "refund_amount and refund_type are required" }, { status: 400 });
-    }
-    if (refund_type !== "full" && refund_type !== "partial") {
-      return NextResponse.json({ error: "refund_type must be 'full' or 'partial'" }, { status: 400 });
+    const { refund_amount, notes } = await req.json();
+    if (!refund_amount) {
+      return NextResponse.json({ error: "refund_amount is required" }, { status: 400 });
     }
 
-    // Calculate reward
-    const fullRate = parseFloat(process.env.PM_FULL_REFUND_AWARD ?? "0.15");
-    const partialRate = parseFloat(process.env.PM_PARTIAL_REFUND_AWARD ?? "0.10");
-    const rate = refund_type === "full" ? fullRate : partialRate;
-    const reward_amount = parseFloat((Number(refund_amount) * rate).toFixed(2));
+    // Fetch original price to determine refund tier
+    const origRows = await profQuery<{ original_price: string }>(
+      `SELECT original_price FROM msbiz_price_matches WHERE id = $1`, [id]
+    );
+    const originalPrice = parseFloat(origRows[0]?.original_price ?? "0");
+    const refundNum = Number(refund_amount);
+    const refundRatio = originalPrice > 0 ? refundNum / originalPrice : 0;
+
+    // 3-tier reward logic:
+    // < 25% of original → partial (PM_PARTIAL_REFUND_AWARD)
+    // 25–99% of original → partial_over (PM_PARTIAL_OVER_REFUND_AWARD)
+    // 100% (full) → full (PM_FULL_REFUND_AWARD)
+    const fullRate        = parseFloat(process.env.PM_FULL_REFUND_AWARD            ?? "0.15");
+    const partialOverRate = parseFloat(process.env.PM_PARTIAL_OVER_REFUND_AWARD    ?? "0.12");
+    const partialRate     = parseFloat(process.env.PM_PARTIAL_REFUND_AWARD         ?? "0.10");
+
+    let refund_type: string;
+    let rate: number;
+    if (refundRatio >= 1.0) {
+      refund_type = "full";
+      rate = fullRate;
+    } else if (refundRatio >= 0.25) {
+      refund_type = "partial_over";
+      rate = partialOverRate;
+    } else {
+      refund_type = "partial";
+      rate = partialRate;
+    }
+    const reward_amount = parseFloat((refundNum * rate).toFixed(2));
 
     // Verify PM exists, belongs to user, get assigned pmer
     const pmRows = await profQuery<{ order_id: string; assigned_pmer_id: string | null }>(
